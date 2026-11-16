@@ -1,0 +1,16 @@
+{
+  "name": "xurosmp-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.0",
+    "dotenv": "^16.4.5",
+    "minecraft-server-util": "^5.4.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
