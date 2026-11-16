@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>xurosmp Dashboard</title>
+<style>
+:root{--bg:#0e1015;--panel:#151821;--card:#1a1e29;--card2:#222735;--line:#2a3042;--text:#eceff6;--muted:#8d97ad;--accent:#6c7bff;--accent2:#8f6bff;--ok:#3ecf8e;--bad:#ff5d6c;--warn:#ffb547;--input:#10131a;--shadow:0 8px 28px rgba(0,0,0,.28)}
+:root[data-theme=light]{--bg:#f2f4f9;--panel:#fff;--card:#fff;--card2:#f3f5fa;--line:#e2e6ef;--text:#1a1f2d;--muted:#667089;--input:#fff;--shadow:0 8px 28px rgba(30,40,80,.08)}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]):not([data-theme=light]){--bg:#f2f4f9;--panel:#fff;--card:#fff;--card2:#f3f5fa;--line:#e2e6ef;--text:#1a1f2d;--muted:#667089;--input:#fff;--shadow:0 8px 28px rgba(30,40,80,.08)}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{display:flex;min-height:100vh}
+
+/* Seitenleiste */
+.side{width:264px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding:calc(18px + env(safe-area-inset-top)) 12px calc(14px + env(safe-area-inset-bottom));z-index:30}
+.logo{display:flex;align-items:center;gap:10px;padding:4px 10px 16px;font-size:18px;font-weight:800;letter-spacing:.2px}
+.logo i{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));font-style:normal;font-size:19px}
+#nav{flex:1;overflow-y:auto}
+.grp{font-size:11px;text-transform:uppercase;letter-spacing:1.1px;color:var(--muted);padding:14px 12px 6px;font-weight:700}
+.nav-btn{display:flex;align-items:center;gap:11px;width:100%;border:0;background:transparent;padding:10px 12px;border-radius:11px;cursor:pointer;color:var(--muted);font-weight:600;text-align:left}
+.nav-btn span{width:22px;text-align:center;font-size:17px}
+.nav-btn:hover{background:var(--card2);color:var(--text)}
+.nav-btn.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 6px 16px rgba(108,123,255,.35)}
+.me{display:flex;align-items:center;gap:10px;padding:12px;margin-top:10px;border-top:1px solid var(--line);font-size:14px}
+.me img{width:34px;height:34px;border-radius:50%}
+.me b{display:block;line-height:1.2}
+.me a{color:var(--muted);font-size:13px}
+#scrim{display:none}
+
+/* Inhalt */
+.content{flex:1;min-width:0}
+.top{display:flex;align-items:center;gap:12px;padding:calc(16px + env(safe-area-inset-top)) 24px 4px}
+.top h1{margin:0;font-size:24px;letter-spacing:.2px}
+#menu{display:none;border:1px solid var(--line);background:var(--card);border-radius:10px;width:40px;height:40px;font-size:18px;cursor:pointer}
+main{max-width:980px;padding:16px 24px calc(40px + env(safe-area-inset-bottom))}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;gap:13px;align-items:center;box-shadow:var(--shadow)}
+.stat .ic{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:13px;background:var(--card2);font-size:22px}
+.stat small{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.8px;font-weight:700}
+.stat b{display:block;font-size:17px;word-break:break-word}
+.stat.ok b{color:var(--ok)} .stat.bad b{color:var(--bad)} .stat.warn b{color:var(--warn)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:18px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 4px;font-size:17px}
+.card .sub{margin:0 0 16px}
+.muted{color:var(--muted);font-size:14px;margin:0 0 12px}
+.empty{color:var(--muted);text-align:center;padding:22px 8px;margin:0}
+.error{color:var(--bad)}
+.field{display:block;margin-bottom:14px}
+.field>span{display:block;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+input,select,textarea{width:100%;padding:11px 13px;border-radius:12px;border:1px solid var(--line);background:var(--input);outline:none;transition:border-color .15s, box-shadow .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,123,255,.22)}
+input[type=color]{padding:3px;height:44px;cursor:pointer}
+textarea{resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.three{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btns.end{justify-content:flex-end;margin-top:16px}
+.btn{border:1px solid var(--line);background:var(--card2);padding:10px 16px;border-radius:12px;font-weight:700;cursor:pointer;transition:transform .08s, filter .15s}
+.btn:hover{filter:brightness(1.12)} .btn:active{transform:scale(.97)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;color:#fff}
+.btn.danger{background:var(--bad);border-color:transparent;color:#fff}
+.btn.ghost{background:transparent}
+.btn.sm{padding:6px 11px;font-size:13px;border-radius:9px}
+.btn:disabled{opacity:.5;cursor:wait}
+.row{display:flex;align-items:center;gap:12px}
+.item{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:13px 0;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.item .t{min-width:0;flex:1;word-break:break-word}
+.item .t small{display:block;color:var(--muted);font-size:13px}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;background:var(--card2);color:var(--muted);border:1px solid var(--line)}
+.badge.ok{color:var(--ok)} .badge.bad{color:var(--bad)} .badge.warn{color:var(--warn)} .badge.acc{color:var(--accent)}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none;background:#99aab5}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.chip{display:inline-flex;align-items:center;gap:7px;background:var(--input);border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:13px}
+.chip button{border:0;background:none;color:var(--bad);cursor:pointer;font-size:16px;padding:0;line-height:1}
+.switch-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--line);cursor:pointer}
+.switch-row:first-of-type{border-top:0}
+.switch-text small{display:block;color:var(--muted);font-size:13px}
+.switch{position:relative;flex:none;width:46px;height:26px}
+.switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:2}
+.switch i{position:absolute;inset:0;border-radius:999px;background:var(--card2);border:1px solid var(--line);transition:.2s}
+.switch i::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.switch input:checked+i{background:var(--ok);border-color:var(--ok)}
+.switch input:checked+i::after{transform:translateX(20px)}
+.bar{height:8px;border-radius:99px;background:var(--card2);overflow:hidden;min-width:90px}
+.bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.lvl{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:800}
+.rank{width:34px;flex:none;text-align:center;font-weight:800;font-size:17px}
+.avatar{width:42px;height:42px;border-radius:50%;flex:none;background:var(--card2)}
+.editor{padding:14px;margin:4px 0 12px;background:var(--card2);border-radius:14px}
+.skeleton{height:90px;border-radius:18px;margin-bottom:18px;background:linear-gradient(90deg,var(--card) 25%,var(--card2) 50%,var(--card) 75%);background-size:200% 100%;animation:sk 1.2s infinite}
+@keyframes sk{to{background-position:-200% 0}}
+.overlay{position:fixed;inset:0;background:rgba(5,8,15,.6);backdrop-filter:blur(3px);display:grid;place-items:center;padding:20px;z-index:50}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;width:100%;max-width:420px;box-shadow:var(--shadow)}
+.modal h3{margin:0 0 10px}
+#toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--card2);border:1px solid var(--line);color:var(--text);padding:11px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.22s;max-width:90vw;z-index:60;box-shadow:var(--shadow);font-weight:600}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.bad{background:var(--bad);color:#fff;border-color:transparent}
+
+@media (max-width:900px){
+  .side{position:fixed;left:0;top:0;bottom:0;transform:translateX(-102%);transition:transform .25s;box-shadow:var(--shadow)}
+  body.nav-open .side{transform:none}
+  body.nav-open #scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}
+  #menu{display:block}
+  .top{padding:calc(14px + env(safe-area-inset-top)) 16px 2px}
+  .top h1{font-size:21px}
+  main{padding:12px 16px calc(40px + env(safe-area-inset-bottom))}
+  .two{grid-template-columns:1fr}
+}
+
+/* Neu: Übersicht, Diagramme, Vorschau, Palette, Themes */
+.hero{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;padding:22px;margin-bottom:18px;border-radius:20px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 22%,var(--card)),color-mix(in srgb,var(--accent2) 14%,var(--card)));border:1px solid var(--line);box-shadow:var(--shadow)}
+.hero h2{margin:0 0 4px;font-size:22px}
+.hero .muted{margin:0}
+.quick{display:flex;gap:8px;flex-wrap:wrap}
+.chart{display:flex;align-items:flex-end;gap:8px;height:170px;padding-top:8px}
+.chart .col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:5px}
+.chart .col small{font-size:11px;color:var(--muted);font-weight:700}
+.chart .fill{width:100%;max-width:46px;border-radius:9px 9px 4px 4px;background:linear-gradient(180deg,var(--accent2),var(--accent));transition:height .4s}
+.chart .col span{font-size:11px;color:var(--muted);text-transform:capitalize}
+.feed .item{padding:10px 0;align-items:flex-start}
+.feed .t{font-size:14px}
+.feed time{color:var(--muted);font-size:12px;white-space:nowrap}
+.embed{display:flex;border-radius:10px;background:var(--input);overflow:hidden;border:1px solid var(--line);margin-top:6px}
+.embed i{width:5px;flex:none}
+.embed .in{padding:12px 14px;min-width:0;word-break:break-word}
+.embed .in b.ti{display:block;margin-bottom:6px}
+.embed .in code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:.92em}
+.embed img{max-width:100%;border-radius:8px;margin-top:10px;display:block}
+.embed .ft{display:block;color:var(--muted);font-size:12px;margin-top:8px}
+.help{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.help span{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--line);color:var(--muted);font-family:ui-monospace,monospace}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:14px}
+.checks label{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--input);cursor:pointer;font-size:14px}
+.checks input{width:auto}
+.themes{display:flex;align-items:center;gap:6px;padding:10px 6px 0;flex-wrap:wrap}
+.themes button{border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:9px;padding:5px 9px;cursor:pointer;font-size:14px}
+.themes button.on{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}
+.themes .sw{width:22px;height:22px;padding:0;border-radius:50%;border:2px solid transparent}
+.themes .sw.on{border-color:var(--text)}
+.overlay.top{place-items:start center;padding-top:12vh}
+.pal{max-width:480px}
+.pal-input{margin-bottom:10px}
+.pal-item{display:flex;gap:10px;align-items:center;width:100%;border:0;background:transparent;padding:10px 12px;border-radius:10px;cursor:pointer;text-align:left}
+.pal-item.on,.pal-item:hover{background:var(--card2)}
+.iconbtn{display:inline-grid;place-items:center;border:1px solid var(--line);background:var(--card);border-radius:10px;width:40px;height:40px;cursor:pointer;font-size:16px}
+.top .spacer{flex:1}
+main>div{animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.btn:focus-visible,.nav-btn:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="logo"><i>⚙️</i> xurosmp</div>
+    <nav id="nav"></nav>
+    <div class="themes" id="themes"></div>
+    <div class="me" id="user"></div>
+  </aside>
+  <div id="scrim"></div>
+  <div class="content">
+    <div class="top"><button id="menu" aria-label="Menü">☰</button><h1 id="title">Übersicht</h1><div class="spacer"></div><button class="iconbtn" id="search" title="Suchen (Strg+K)">🔎</button></div>
+    <main id="main"></main>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const main = $('main');
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+let me = {};
+
+function h(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) e.append(kid instanceof Node ? kid : document.createTextNode(kid ?? ''));
+  return e;
+}
+
+async function api(method, url, body) {
+  const r = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'dash' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (r.status === 401) { location.href = '/login'; throw new Error('Nicht angemeldet'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Fehler ' + r.status);
+  return j;
+}
+
+function toast(msg, bad) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show' + (bad ? ' bad' : '');
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => { t.className = ''; }, 3600);
+}
+
+async function act(button, fn) {
+  button.disabled = true;
+  try { await fn(); } catch (e) { toast(e.message, true); } finally { button.disabled = false; }
+}
+
+function dialog({ title, body, ok = 'OK', danger = false, onOk }) {
+  return new Promise((resolve) => {
+    const close = (v) => { overlay.remove(); resolve(v); };
+    const okBtn = h('button', {
+      class: 'btn ' + (danger ? 'danger' : 'primary'),
+      onclick: async () => {
+        if (onOk) {
+          okBtn.disabled = true;
+          try { await onOk(); } catch (e) { toast(e.message, true); okBtn.disabled = false; return; }
+        }
+        close(true);
+      },
+    }, ok);
+    const overlay = h('div', { class: 'overlay', onclick: (e) => { if (e.target === overlay) close(false); } },
+      h('div', { class: 'modal' }, h('h3', {}, title), body,
+        h('div', { class: 'btns end' }, h('button', { class: 'btn ghost', onclick: () => close(false) }, 'Abbrechen'), okBtn)));
+    document.body.append(overlay);
+  });
+}
+const ask = (title, text, ok = 'Löschen') => dialog({ title, body: h('p', { class: 'muted' }, text), ok, danger: true });
+
+const btn = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: (e) => act(e.currentTarget, fn) }, label);
+const field = (label, input) => h('label', { class: 'field' }, h('span', {}, label), input);
+const card = (title, sub, ...kids) => h('section', { class: 'card' }, title ? h('h2', {}, title) : '', sub ? h('p', { class: 'muted sub' }, sub) : '', ...kids);
+const stat = (icon, label, value, tone = '') => h('div', { class: 'stat ' + tone }, h('div', { class: 'ic' }, icon), h('div', {}, h('small', {}, label), h('b', {}, String(value))));
+const badge = (text, tone = '') => h('span', { class: 'badge ' + tone }, text);
+const empty = (text) => h('p', { class: 'empty' }, text);
+const progress = (p) => h('div', { class: 'bar' }, h('i', { style: `width:${Math.max(0, Math.min(100, p))}%` }));
+const dot = (color) => h('span', { class: 'dot', style: `background:${color && color !== '#000000' ? color : '#99aab5'}` });
+
+function makeSwitch(label, checked, hint) {
+  const input = h('input', { type: 'checkbox', checked: !!checked });
+  const el = h('label', { class: 'switch-row' },
+    h('span', { class: 'switch-text' }, h('b', {}, label), hint ? h('small', {}, hint) : ''),
+    h('span', { class: 'switch' }, input, h('i', {})));
+  return { el, input };
+}
+function toggle(label, checked, onchange, hint) {
+  const s = makeSwitch(label, checked, hint);
+  s.input.addEventListener('change', (e) => act(e.target, () => onchange(e.target.checked)));
+  return s.el;
+}
+
+let chans = null;
+const getChans = async () => (chans ??= await api('GET', '/api/channels'));
+const chanSelect = (list, withDefault) => h('select', {},
+  withDefault ? h('option', { value: '' }, withDefault) : '', list.map((c) => h('option', { value: c.id }, '#' + c.name)));
+
+function timeAgo(t) {
+  const s = Math.max(1, Math.round((Date.now() - t) / 1000));
+  if (s < 60) return 'gerade eben';
+  if (s < 3600) return `vor ${Math.round(s / 60)} Min.`;
+  if (s < 86400) return `vor ${Math.round(s / 3600)} Std.`;
+  return `vor ${Math.round(s / 86400)} Tg.`;
+}
+
+// Mini-Markdown für Vorschauen: **fett** und `code`
+function mdLite(str) {
+  const out = [];
+  String(str).split('\n').forEach((line, i, arr) => {
+    const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+    let last = 0, m;
+    while ((m = re.exec(line))) {
+      if (m.index > last) out.push(line.slice(last, m.index));
+      const tok = m[0];
+      out.push(tok.startsWith('**') ? h('b', {}, tok.slice(2, -2)) : h('code', {}, tok.slice(1, -1)));
+      last = m.index + tok.length;
+    }
+    if (last < line.length) out.push(line.slice(last));
+    if (i < arr.length - 1) out.push(h('br'));
+  });
+  return out;
+}
+
+function embedPreview() {
+  const bar = h('i', {});
+  const ti = h('b', { class: 'ti' });
+  const ds = h('div');
+  const im = h('div');
+  const ft = h('span', { class: 'ft' });
+  const root = h('div', { class: 'embed' }, bar, h('div', { class: 'in' }, ti, ds, im, ft));
+  return {
+    root,
+    set({ title, text, color, image, footer }) {
+      bar.setAttribute('style', `background:${/^#[0-9a-f]{6}$/i.test(color || '') ? color : '#57f287'}`);
+      ti.textContent = title || '';
+      ds.replaceChildren(...mdLite(text || ''));
+      im.replaceChildren(...(image && /^https:\/\//i.test(image) ? [h('img', { src: image, alt: '' })] : []));
+      ft.textContent = footer || '';
+    },
+  };
+}
+
+function barChart(points, { zero = true, unit = '' } = {}) {
+  if (!points.length) return empty('Noch keine Daten. Der Bot sammelt jede Stunde einen Messwert.');
+  const vals = points.map((p) => p.value);
+  const max = Math.max(...vals, 1), min = zero ? 0 : Math.min(...vals);
+  const span = Math.max(max - min, 1);
+  return h('div', { class: 'chart' }, points.map((p) => h('div', { class: 'col', title: `${p.label}: ${p.value}${unit}` },
+    h('small', {}, String(p.value)),
+    h('div', { class: 'fill', style: `height:${Math.max(6, ((p.value - min) / span) * 100)}%` }),
+    h('span', {}, p.label))));
+}
+
+function byDay(history, key, agg) {
+  const days = [];
+  for (const p of history) {
+    if (p[key] == null) continue;
+    const d = new Date(p.t);
+    const id = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+    let day = days.find((x) => x.id === id);
+    if (!day) { day = { id, label: d.toLocaleDateString('de-DE', { weekday: 'short' }), value: p[key] }; days.push(day); }
+    day.value = agg === 'max' ? Math.max(day.value, p[key]) : p[key];
+  }
+  return days.slice(-7);
+}
+
+// ───────── Übersicht ─────────
+async function vOverview(root) {
+  const [o, hist, act2] = await Promise.all([api('GET', '/api/overview'), api('GET', '/api/history'), api('GET', '/api/activity')]);
+  const go = (name) => () => show(name);
+  root.append(
+    h('div', { class: 'hero' },
+      h('div', {}, h('h2', {}, `Hallo ${me.name || ''} 👋`), h('p', { class: 'muted' }, 'Hier siehst du auf einen Blick, was auf deinem Server passiert.')),
+      h('div', { class: 'quick' },
+        h('button', { class: 'btn primary', onclick: go('Giveaways') }, '🎁 Giveaway'),
+        h('button', { class: 'btn', onclick: go('Nachrichten') }, '📢 Nachricht'),
+        h('button', { class: 'btn', onclick: go('Rollen & Mitglieder') }, '🎭 Rollen'),
+        h('button', { class: 'btn', onclick: go('Moderation') }, '🛡️ Moderation'))),
+    h('div', { class: 'stats' },
+      stat('🏠', 'Server', o.guild), stat('👥', 'Mitglieder', o.members), stat('🤖', 'Bots', o.bots), stat('💬', 'Kanäle', o.channels),
+      stat('⛏️', 'Minecraft', o.mc.online ? `${o.mc.players}/${o.mc.max} online` : 'Offline', o.mc.online ? 'ok' : 'bad'),
+      stat('🧩', 'Setup', o.setup ? 'Eingerichtet' : 'Fehlt', o.setup ? 'ok' : 'warn'),
+      stat('💾', 'Speicher', o.persistent ? 'Volume aktiv' : 'Nur Backup', o.persistent ? 'ok' : 'warn')),
+    h('div', { class: 'cols' },
+      card('📈 Mitglieder', 'Letzte 7 Tage', barChart(byDay(hist, 'm', 'last'), { zero: false })),
+      card('⛏️ Minecraft-Spieler', 'Höchstwert pro Tag', barChart(byDay(hist, 'p', 'max')))),
+    h('div', { class: 'cols' },
+      card('🕒 Letzte Aktivität', 'Was auf dem Server und im Dashboard passiert ist',
+        act2.length ? h('div', { class: 'feed' }, act2.slice(0, 10).map((a) => h('div', { class: 'item' },
+          h('div', { class: 't' }, a.text), h('time', {}, timeAgo(a.t))))) : empty('Noch nichts passiert.')),
+      h('div', {},
+        card('Neue Mitglieder', 'Was passiert beim Beitritt?',
+          toggle('Regeln müssen akzeptiert werden', o.rulesGate, async (v) => { await api('POST', '/api/settings', { rulesGate: v }); toast('Gespeichert'); },
+            'Aus: Rolle Spieler sofort. An: erst nach Klick auf "Regeln akzeptieren".')),
+        card('Tickets', 'Hilfe beim Aufnehmen von Tickets',
+          toggle('Ticket-Assistent', o.guided || o.ai, async (v) => { await api('POST', '/api/settings', { guided: v }); toast('Gespeichert'); },
+            'Stellt feste Fragen und fasst die Antworten zusammen (kostenlos).'),
+          o.aiAvailable ? toggle('KI-Assistent', o.ai, async (v) => { await api('POST', '/api/settings', { ai: v }); toast('Gespeichert'); },
+            'Echte KI, kostet bei Anthropic.') : ''))));
+}
+
+// ───────── Server ─────────
+async function vServer(root) {
+  const o = await api('GET', '/api/overview');
+  root.append(card('Einrichtung',
+    o.setup ? 'Der Server ist eingerichtet. Zum Neustart zuerst zurücksetzen.' : 'Erstellt Rollen, Kategorien, Kanäle, Regeln, Panels und AutoMod.',
+    o.setup ? badge('✅ Eingerichtet', 'ok') : btn('🚀 Setup ausführen', async () => {
+      await api('POST', '/api/setup'); toast('Setup fertig'); show('Server');
+    }, 'primary')));
+
+  const bk = await api('GET', '/api/backup');
+  root.append(card('💾 Datensicherung', 'XP, Giveaways, Streamer, Einstellungen und Panels werden dauerhaft gespeichert.',
+    h('div', { class: 'item' }, h('div', { class: 't' }, h('b', {}, 'Volume'),
+      h('small', {}, bk.persistent ? 'Aktiv: Die Daten überleben jeden Neustart und jedes Update.' : 'Kein Volume erkannt. Lege in Railway ein Volume an, sonst hilft nur das Discord-Backup.')),
+      badge(bk.persistent ? '✅ Aktiv' : '⚠️ Fehlt', bk.persistent ? 'ok' : 'warn')),
+    h('div', { class: 'item' }, h('div', { class: 't' }, h('b', {}, 'Discord-Backup'),
+      h('small', {}, 'Alle 5 Minuten im Kanal 💾・backup. Wird nach einem Datenverlust automatisch wiederhergestellt.'),
+      h('small', {}, bk.last ? 'Letztes Backup: ' + new Date(bk.last).toLocaleString('de-DE') : 'Seit dem Start noch kein Backup.')),
+      btn('Jetzt sichern', async () => { await api('POST', '/api/backup'); toast('Backup erstellt'); show('Server'); }, 'sm primary'))));
+
+  const conf = h('input', { placeholder: 'LÖSCHEN' });
+  const roles = h('input', { type: 'checkbox' });
+  root.append(card('⚠️ Gefahrenzone', 'Löscht ALLE Kanäle und Kategorien des Servers samt Nachrichten. Das kann nicht rückgängig gemacht werden.',
+    field('Zur Bestätigung LÖSCHEN eintippen', conf),
+    h('label', { class: 'row', style: 'margin-bottom:14px' }, roles, h('span', {}, 'Auch alle Rollen löschen (außer Bot- und Integrationsrollen)')),
+    btn('Server zurücksetzen', async () => {
+      const r0 = await api('POST', '/api/reset', { confirm: conf.value, rollen: roles.checked });
+      toast(`${r0.n} Kanäle gelöscht` + (r0.f ? `, ${r0.f} nicht möglich` : ''));
+      show('Server');
+    }, 'danger')));
+}
+
+// ───────── Rollen & Mitglieder ─────────
+async function vRoles(root) {
+  const roles = await api('GET', '/api/roles');
+  const editable = roles.filter((r) => r.editable);
+  const editIds = new Set(editable.map((r) => r.id));
+
+  const nName = h('input', { placeholder: 'z. B. 🎮 Gamer' });
+  const nColor = h('input', { type: 'color', value: '#5865f2' });
+  const nHoist = makeSwitch('Getrennt anzeigen', false, 'Zeigt die Rolle separat in der Mitgliederliste.');
+  const nMent = makeSwitch('Erwähnbar', false, 'Jeder darf die Rolle pingen.');
+  root.append(card('Neue Rolle', 'Tipp: Ein Emoji im Namen macht die Rolle besser erkennbar.',
+    h('div', { class: 'two' }, field('Name', nName), field('Farbe', nColor)), nHoist.el, nMent.el,
+    h('div', { class: 'btns end' }, btn('Rolle erstellen', async () => {
+      await api('POST', '/api/roles', { name: nName.value, color: nColor.value, hoist: nHoist.input.checked, mentionable: nMent.input.checked });
+      toast('Rolle erstellt'); show('Rollen & Mitglieder');
+    }, 'primary'))));
+
+  const list = h('div');
+  for (const r of roles) {
+    const eName = h('input', { value: r.name });
+    const eColor = h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(r.color) ? r.color : '#99aab5' });
+    const eHoist = makeSwitch('Getrennt anzeigen', r.hoist);
+    const eMent = makeSwitch('Erwähnbar', r.mentionable);
+    const editor = h('div', { class: 'editor', style: 'display:none' },
+      h('div', { class: 'two' }, field('Name', eName), field('Farbe', eColor)), eHoist.el, eMent.el,
+      h('div', { class: 'btns end' },
+        r.core ? '' : btn('Löschen', async () => {
+          if (!(await ask('Rolle löschen?', `„${r.name}“ wird gelöscht und bei allen Mitgliedern entfernt.`))) return;
+          await api('DELETE', '/api/roles/' + r.id); toast('Rolle gelöscht'); show('Rollen & Mitglieder');
+        }, 'danger sm'),
+        btn('Speichern', async () => {
+          await api('PUT', '/api/roles/' + r.id, { name: eName.value, color: eColor.value, hoist: eHoist.input.checked, mentionable: eMent.input.checked });
+          toast('Gespeichert'); show('Rollen & Mitglieder');
+        }, 'primary sm')));
+    list.append(h('div', {},
+      h('div', { class: 'item' }, dot(r.color),
+        h('div', { class: 't' }, h('b', {}, r.name), h('small', {}, `${r.members} Mitglieder`)),
+        h('div', { class: 'btns' },
+          r.admin ? badge('Admin', 'warn') : '', r.managed ? badge('Bot', '') : '', r.core ? badge('Setup', 'acc') : '',
+          r.editable ? h('button', { class: 'btn sm', onclick: () => { editor.style.display = editor.style.display === 'none' ? 'block' : 'none'; } }, 'Bearbeiten')
+            : badge('🔒', ''))),
+      editor));
+  }
+  root.append(card('Rollen', 'Du kannst nur Rollen bearbeiten, die unter deiner und unter der Bot-Rolle stehen.', list));
+
+  const q = h('input', { placeholder: 'Mitglied suchen (mindestens 2 Buchstaben)' });
+  const out = h('div');
+  let timer;
+  const memberCard = (m) => {
+    const sel = h('select', {}, h('option', { value: '' }, 'Rolle hinzufügen …'),
+      editable.filter((r) => !m.roles.some((x) => x.id === r.id)).map((r) => h('option', { value: r.id }, r.name)));
+    return h('div', { class: 'item', style: 'align-items:flex-start' },
+      h('img', { class: 'avatar', src: m.avatar, alt: '' }),
+      h('div', { class: 't' }, h('b', {}, m.name), h('small', {}, '@' + m.user + (m.bot ? ' · Bot' : '')),
+        h('div', { class: 'chips' }, m.roles.length ? m.roles.map((r) => h('span', { class: 'chip' }, dot(r.color), r.name,
+          editIds.has(r.id) ? h('button', { title: 'Entfernen', onclick: (e) => act(e.currentTarget, async () => {
+            await api('DELETE', `/api/members/${m.id}/roles/${r.id}`); toast('Rolle entfernt'); search();
+          }) }, '×') : '')) : h('small', {}, 'Keine Rollen')),
+        h('div', { class: 'btns' }, sel, btn('Hinzufügen', async () => {
+          if (!sel.value) return toast('Bitte wähle eine Rolle.', true);
+          await api('POST', `/api/members/${m.id}/roles/${sel.value}`); toast('Rolle vergeben'); search();
+        }, 'sm'))));
+  };
+  async function search() {
+    const term = q.value.trim();
+    if (term.length < 2) { out.replaceChildren(); return; }
+    try {
+      const found = await api('GET', '/api/members?q=' + encodeURIComponent(term));
+      out.replaceChildren(...(found.length ? found.map(memberCard) : [empty('Keine Treffer.')]));
+    } catch (e) { toast(e.message, true); }
+  }
+  q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 400); });
+  root.append(card('Mitglieder', 'Suche ein Mitglied und vergib oder entziehe Rollen.', q, out));
+}
+
+// ───────── XP & Level ─────────
+async function vXp(root) {
+  const [d, roles] = await Promise.all([api('GET', '/api/xp'), api('GET', '/api/roles')]);
+  const s = d.settings;
+  const sEn = makeSwitch('XP-System aktiv', s.enabled, 'Mitglieder sammeln XP durch Schreiben und in Sprachkanälen.');
+  const sAn = makeSwitch('Level-Up-Nachrichten', s.announce, 'Meldung im Kanal 📈・level-ups.');
+  const iMin = h('input', { type: 'number', min: '1', max: '500', value: String(s.min) });
+  const iMax = h('input', { type: 'number', min: '1', max: '500', value: String(s.max) });
+  const iCd = h('input', { type: 'number', min: '5', max: '3600', value: String(s.cooldown) });
+  const iVoice = h('input', { type: 'number', min: '0', max: '500', value: String(s.voice) });
+  root.append(card('Einstellungen', `${d.total} Mitglieder haben schon XP gesammelt.`,
+    sEn.el, sAn.el,
+    h('div', { class: 'three', style: 'margin-top:14px' },
+      field('XP pro Nachricht (min)', iMin), field('XP pro Nachricht (max)', iMax),
+      field('Pause zwischen XP (Sek.)', iCd), field('Voice-XP pro Minute', iVoice)),
+    h('p', { class: 'muted' }, 'Voice-XP gibt es nur, wenn mindestens 2 Personen im Kanal sind und niemand taub gestellt ist.'),
+    h('div', { class: 'btns end' }, btn('Speichern', async () => {
+      await api('PUT', '/api/xp/settings', { enabled: sEn.input.checked, announce: sAn.input.checked, min: iMin.value, max: iMax.value, cooldown: iCd.value, voice: iVoice.value });
+      toast('Gespeichert'); show('XP & Level');
+    }, 'primary'))));
+
+  root.append(card('🌐 Öffentliche Rangliste', 'Eine Webseite ohne Anmeldung, auf der jeder die Top 25 sieht (Anzeigename, Level, XP).',
+    toggle('Öffentlich sichtbar', d.publicLeaderboard, async (v) => { await api('POST', '/api/settings', { publicLeaderboard: v }); toast('Gespeichert'); show('XP & Level'); },
+      'Standardmäßig aus. Schalte sie nur ein, wenn deine Mitglieder damit einverstanden sind.'),
+    d.publicLeaderboard ? h('p', { class: 'muted', style: 'margin-top:10px' }, 'Adresse: ', h('a', { href: d.publicUrl, target: '_blank', rel: 'noopener' }, d.publicUrl)) : ''));
+
+  const usable = roles.filter((r) => r.editable);
+  const rLevel = h('input', { type: 'number', min: '1', max: '500', placeholder: 'Level' });
+  const rRole = h('select', {}, usable.map((r) => h('option', { value: r.id }, r.name)));
+  root.append(card('Level-Belohnungen', 'Ab diesem Level bekommt ein Mitglied automatisch die Rolle.',
+    d.rewards.length ? d.rewards.map((r) => h('div', { class: 'item' },
+      h('div', { class: 'lvl' }, String(r.level)), h('div', { class: 't' }, h('b', {}, r.roleName), h('small', {}, `Ab Level ${r.level}`)),
+      btn('Entfernen', async () => { await api('DELETE', '/api/xp/rewards/' + r.level); show('XP & Level'); }, 'sm danger')))
+      : empty('Noch keine Belohnungen.'),
+    h('div', { class: 'two', style: 'margin-top:14px' }, field('Ab Level', rLevel), field('Rolle', rRole)),
+    h('div', { class: 'btns end' }, btn('Belohnung hinzufügen', async () => {
+      await api('POST', '/api/xp/rewards', { level: rLevel.value, roleId: rRole.value }); toast('Gespeichert'); show('XP & Level');
+    }, 'primary'))));
+
+  const medal = (n) => ['🥇', '🥈', '🥉'][n - 1] || String(n);
+  root.append(card('Rangliste', 'Die Top 50 nach XP.', d.leaderboard.length ? d.leaderboard.map((u) => h('div', { class: 'item' },
+    h('div', { class: 'rank' }, medal(u.rank)), h('div', { class: 'lvl' }, String(u.level)),
+    h('div', { class: 't' }, h('b', {}, u.name), h('small', {}, `${u.xp} XP · ${u.msgs} Nachrichten`), progress((u.current / u.needed) * 100)),
+    h('div', { class: 'btns' },
+      btn('XP', async () => {
+        const inp = h('input', { type: 'number', min: '0', value: String(u.xp) });
+        await dialog({ title: 'XP ändern: ' + u.name, body: field('Neue XP', inp), ok: 'Speichern', onOk: async () => {
+          await api('POST', '/api/xp/users/' + u.id, { xp: inp.value }); toast('Gespeichert'); show('XP & Level');
+        } });
+      }, 'sm'),
+      btn('Reset', async () => {
+        if (!(await ask('XP zurücksetzen?', `${u.name} verliert alle XP und das Level.`, 'Zurücksetzen'))) return;
+        await api('DELETE', '/api/xp/users/' + u.id); show('XP & Level');
+      }, 'sm danger')))) : empty('Noch niemand hat XP gesammelt.')));
+}
+
+// ───────── Willkommen ─────────
+async function vWelcome(root) {
+  const [d, chs] = await Promise.all([api('GET', '/api/welcome'), getChans()]);
+  const w = d.config;
+  const en = makeSwitch('Willkommensnachricht aktiv', w.enabled, 'Wird gesendet, sobald jemand dem Server beitritt.');
+  const ch = chanSelect(chs, 'Willkommens-Kanal (Standard)');
+  ch.value = w.channelId || '';
+  const title = h('input', { value: w.title });
+  const text = h('textarea', { rows: 6 }, w.text);
+  const color = h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(w.color) ? w.color : '#57f287' });
+  const prev = embedPreview();
+  const sample = (str) => String(str).replaceAll('{user}', '@Max').replaceAll('{name}', 'Max').replaceAll('{server}', d.server)
+    .replaceAll('{count}', String(d.members + 1)).replaceAll('{rules}', 'Bitte lies die Regeln in #regeln.').replaceAll('{ip}', d.ip);
+  const update = () => prev.set({ title: sample(title.value), text: sample(text.value), color: color.value });
+  for (const el of [title, text, color]) el.addEventListener('input', update);
+  update();
+  root.append(card('Willkommensnachricht', 'Wird im Willkommens-Kanal gepostet. Platzhalter werden automatisch ersetzt.',
+    en.el,
+    h('div', { class: 'help', style: 'margin-top:14px' }, ['{user}', '{name}', '{server}', '{count}', '{rules}', '{ip}'].map((x) => h('span', {}, x))),
+    h('div', { class: 'two' }, field('Kanal', ch), field('Farbe', color)),
+    field('Titel', title), field('Text', text),
+    h('p', { class: 'muted' }, 'Vorschau'), prev.root,
+    h('div', { class: 'btns end' },
+      btn('Testnachricht an mich', async () => { await api('POST', '/api/welcome/test'); toast('Testnachricht gesendet'); }, ''),
+      btn('Speichern', async () => {
+        await api('PUT', '/api/welcome', { enabled: en.input.checked, channelId: ch.value, title: title.value, text: text.value, color: color.value });
+        toast('Gespeichert');
+      }, 'primary'))));
+}
+
+// ───────── Nachrichten ─────────
+async function vAnnounce(root) {
+  const [list, roles] = await Promise.all([getChans(), api('GET', '/api/roles')]);
+  const ch = chanSelect(list, 'Ankündigungs-Kanal (Standard)');
+  const t = h('input', { placeholder: '📢 Ankündigung' });
+  const x = h('textarea', { rows: 6, placeholder: 'Text (unterstützt **fett** und `code`)' });
+  const color = h('input', { type: 'color', value: '#57f287' });
+  const image = h('input', { placeholder: 'https://… (optional)' });
+  const foot = h('input', { placeholder: 'Fußzeile (optional)' });
+  const ping = h('select', {}, h('option', { value: '' }, 'Niemanden pingen'), roles.filter((r) => !r.managed).map((r) => h('option', { value: r.id }, '@' + r.name)));
+  const prev = embedPreview();
+  const update = () => prev.set({ title: t.value || '📢 Ankündigung', text: x.value, color: color.value, image: image.value, footer: foot.value });
+  for (const el of [t, x, color, image, foot]) el.addEventListener('input', update);
+  update();
+  root.append(card('Nachricht senden', 'Schicke eine gestaltete Nachricht in einen Kanal, auf Wunsch mit Ping.',
+    h('div', { class: 'two' }, field('Kanal', ch), field('Ping', ping)),
+    field('Titel', t), field('Text', x),
+    h('div', { class: 'two' }, field('Farbe', color), field('Bild-URL', image)),
+    field('Fußzeile', foot),
+    h('p', { class: 'muted' }, 'Vorschau'), prev.root,
+    h('div', { class: 'btns end' }, btn('Senden', async () => {
+      await api('POST', '/api/announce', { channelId: ch.value, title: t.value, text: x.value, color: color.value, image: image.value, footer: foot.value, pingRoleId: ping.value });
+      toast('Gesendet'); x.value = ''; update();
+    }, 'primary'))));
+}
+
+// ───────── Moderation ─────────
+async function vModeration(root) {
+  const warns = await api('GET', '/api/warnings');
+  const modDialog = (m, action) => {
+    const reason = h('textarea', { rows: 3, placeholder: 'Grund (optional)' });
+    const minutes = h('input', { type: 'number', min: '1', max: '40320', value: '60' });
+    const labels = { warn: ['Verwarnen', 'Verwarnen'], timeout: ['Timeout', 'Timeout geben'], kick: ['Kicken', 'Kicken'], ban: ['Bannen', 'Bannen'] };
+    return dialog({
+      title: `${labels[action][0]}: ${m.name}`, danger: action === 'kick' || action === 'ban', ok: labels[action][1],
+      body: h('div', {}, action === 'timeout' ? field('Dauer in Minuten', minutes) : '', field('Grund', reason),
+        action === 'warn' ? h('p', { class: 'muted' }, 'Ab 3 Verwarnungen gibt es automatisch 60 Minuten Timeout.') : ''),
+      onOk: async () => {
+        const r = await api('POST', '/api/moderation', { userId: m.id, action, reason: reason.value, minutes: minutes.value });
+        toast(action === 'warn' ? `Verwarnt (${r.warns}. Verwarnung)` : 'Erledigt');
+        show('Moderation');
+      },
+    });
+  };
+  const showWarns = async (id, name) => {
+    const list = await api('GET', '/api/warnings/' + id);
+    await dialog({
+      title: 'Verwarnungen: ' + name, danger: true, ok: 'Alle löschen',
+      body: list.length ? h('div', {}, list.map((w) => h('div', { class: 'item' },
+        h('div', { class: 't' }, h('b', {}, w.reason), h('small', {}, `${new Date(w.at).toLocaleString('de-DE')} · von ${w.by}`))))) : empty('Keine Verwarnungen.'),
+      onOk: async () => { await api('DELETE', '/api/warnings/' + id); toast('Gelöscht'); show('Moderation'); },
+    });
+  };
+
+  const q = h('input', { placeholder: 'Mitglied suchen (mindestens 2 Buchstaben)' });
+  const out = h('div');
+  let timer;
+  const memberCard = (m) => h('div', { class: 'item', style: 'align-items:flex-start' },
+    h('img', { class: 'avatar', src: m.avatar, alt: '' }),
+    h('div', { class: 't' }, h('b', {}, m.name), h('small', {}, '@' + m.user + (m.bot ? ' · Bot' : '')),
+      warns.counts[m.id] ? h('div', { style: 'margin-top:6px' }, badge(`⚠️ ${warns.counts[m.id]} Verwarnung(en)`, 'warn')) : '',
+      h('div', { class: 'btns', style: 'margin-top:10px' },
+        h('button', { class: 'btn sm', onclick: () => modDialog(m, 'warn') }, '⚠️ Verwarnen'),
+        h('button', { class: 'btn sm', onclick: () => modDialog(m, 'timeout') }, '⏳ Timeout'),
+        h('button', { class: 'btn sm danger', onclick: () => modDialog(m, 'kick') }, '👢 Kick'),
+        h('button', { class: 'btn sm danger', onclick: () => modDialog(m, 'ban') }, '🔨 Bann'))));
+  async function search() {
+    const term = q.value.trim();
+    if (term.length < 2) { out.replaceChildren(); return; }
+    try {
+      const found = await api('GET', '/api/members?q=' + encodeURIComponent(term));
+      out.replaceChildren(...(found.length ? found.map(memberCard) : [empty('Keine Treffer.')]));
+    } catch (e) { toast(e.message, true); }
+  }
+  q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 400); });
+  root.append(card('Mitglied moderieren', 'Du kannst nur Mitglieder moderieren, die in der Rollenliste unter dir stehen.', q, out));
+  root.append(card('⚠️ Verwarnungen', 'Mitglieder mit den meisten Verwarnungen.', warns.top.length ? warns.top.map((u) => h('div', { class: 'item' },
+    h('div', { class: 't' }, h('b', {}, u.name), h('small', {}, `${u.count} Verwarnung(en)`)),
+    btn('Ansehen', () => showWarns(u.id, u.name), 'sm'))) : empty('Noch keine Verwarnungen. 🎉')));
+}
+
+// ───────── Panels ─────────
+const TYPES = { ticket: '🎫 Ticket-Panel', apply: '📝 Bewerbungs-Panel', rules: '📜 Regeln', roles: '🔔 Rollen-Panel', rolebuttons: '🎭 Rollen-Buttons' };
+
+async function vPanels(root) {
+  const [panels, list, roles] = await Promise.all([api('GET', '/api/panels'), getChans(), api('GET', '/api/roles')]);
+  const type = h('select', {}, h('option', { value: 'ticket' }, 'Ticket'), h('option', { value: 'apply' }, 'Bewerbung'), h('option', { value: 'rolebuttons' }, 'Rollen-Buttons'));
+  const ch = chanSelect(list);
+  const title = h('input', { placeholder: 'Titel (optional)' });
+  const body = h('textarea', { rows: 3, placeholder: 'Text (optional)' });
+  const pickable = roles.filter((r) => r.editable && !r.admin);
+  const boxes = pickable.map((r) => ({ r, input: h('input', { type: 'checkbox' }) }));
+  const rolePick = h('div', { style: 'display:none' }, h('p', { class: 'muted' }, 'Wähle bis zu 5 Rollen, die sich Mitglieder per Button selbst geben dürfen. Rollen mit Moderations- oder Verwaltungsrechten sind nicht erlaubt.'),
+    h('div', { class: 'checks' }, boxes.map((b) => h('label', {}, b.input, dot(b.r.color), b.r.name))));
+  type.addEventListener('change', () => { rolePick.style.display = type.value === 'rolebuttons' ? 'block' : 'none'; });
+  root.append(card('Neues Panel', 'Ein Panel ist eine Nachricht mit Button, zum Beispiel zum Öffnen eines Tickets.',
+    h('div', { class: 'two' }, field('Art', type), field('Kanal', ch)), field('Titel', title), field('Text', body), rolePick,
+    h('div', { class: 'btns end' }, btn('Panel erstellen', async () => {
+      if (type.value === 'rolebuttons') {
+        const ids = boxes.filter((b) => b.input.checked).map((b) => b.r.id);
+        if (!ids.length) throw new Error('Bitte wähle mindestens eine Rolle.');
+        await api('POST', '/api/rolepanels', { channelId: ch.value, title: title.value, text: body.value, roleIds: ids });
+      } else {
+        await api('POST', '/api/panels', { type: type.value, channelId: ch.value, title: title.value, text: body.value });
+      }
+      toast('Panel erstellt'); show('Panels');
+    }, 'primary'))));
+
+  if (!panels.length) root.append(card('', '', empty('Noch keine Panels vorhanden.')));
+  for (const p of panels) {
+    const t = h('input', { value: p.title });
+    const x = h('textarea', { rows: 5 }, p.text);
+    const b = h('input', { value: p.button });
+    const c = h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : '#57f287' });
+    const multi = p.type === 'rolebuttons';
+    root.append(card(`${TYPES[p.type] || 'Panel'}`, `in #${p.channel}`,
+      field('Titel', t), field('Text', x), h('div', { class: 'two' }, multi ? '' : field('Button-Text', b), field('Farbe', c)),
+      h('div', { class: 'btns end' },
+        btn('Löschen', async () => {
+          if (!(await ask('Panel löschen?', 'Die Nachricht wird aus dem Kanal entfernt.'))) return;
+          await api('DELETE', `/api/panels/${p.channelId}/${p.messageId}`); toast('Panel gelöscht'); show('Panels');
+        }, 'danger'),
+        btn('Speichern', async () => {
+          await api('PUT', `/api/panels/${p.channelId}/${p.messageId}`, { title: t.value, text: x.value, button: multi ? '' : b.value, color: c.value });
+          toast('Panel aktualisiert');
+        }, 'primary'))));
+  }
+}
+
+// ───────── Auto-Antworten ─────────
+async function vFaq(root) {
+  const faq = await api('GET', '/api/faq');
+  const k = h('input', { placeholder: 'z. B. whitelist' });
+  const a = h('textarea', { rows: 3, placeholder: 'Antwort, die der Bot sendet' });
+  root.append(card('Neue Auto-Antwort', 'Gilt in Tickets, wenn der Spieler das Stichwort schreibt (nur ohne KI und ohne laufenden Fragen-Ablauf).',
+    field('Stichwort', k), field('Antwort', a),
+    h('div', { class: 'btns end' }, btn('Speichern', async () => {
+      await api('POST', '/api/faq', { k: k.value, a: a.value }); toast('Gespeichert'); show('Auto-Antworten');
+    }, 'primary'))));
+  root.append(card('Vorhandene Antworten', '', faq.length ? faq.map((f) => h('div', { class: 'item' },
+    h('div', { class: 't' }, h('b', {}, f.k), h('small', {}, f.a)),
+    btn('Löschen', async () => { await api('DELETE', '/api/faq/' + encodeURIComponent(f.k)); show('Auto-Antworten'); }, 'sm danger')))
+    : empty('Keine Einträge.')));
+}
+
+// ───────── AutoMod ─────────
+async function vAutomod(root) {
+  const d = await api('GET', '/api/automod');
+  root.append(card('Regeln', 'Discords eingebauter AutoMod, vom Bot eingerichtet.',
+    d.rules.length ? d.rules.map((r) => h('div', { class: 'item' }, h('div', { class: 't' }, h('b', {}, r.name)), badge(r.enabled ? 'Aktiv' : 'Aus', r.enabled ? 'ok' : '')))
+      : empty('Noch keine AutoMod-Regeln vom Bot.'),
+    h('div', { class: 'btns end' },
+      btn('Alle entfernen', async () => {
+        if (!(await ask('AutoMod entfernen?', 'Alle AutoMod-Regeln des Bots werden gelöscht.'))) return;
+        const r = await api('DELETE', '/api/automod'); toast(r.removed + ' Regeln gelöscht'); show('AutoMod');
+      }, 'danger'),
+      btn('Regeln einrichten', async () => {
+        const r = await api('POST', '/api/automod/setup');
+        toast(r.made.length ? 'Erstellt: ' + r.made.join(', ') : 'Schon alles eingerichtet'); show('AutoMod');
+      }, 'primary'))));
+  const w = h('input', { placeholder: 'Wort blockieren' });
+  root.append(card('Eigene blockierte Wörter', 'Nachrichten mit diesen Wörtern werden blockiert.',
+    d.words.length ? h('div', { class: 'chips' }, d.words.map((x) => h('span', { class: 'chip' }, x,
+      h('button', { title: 'Entfernen', onclick: (e) => act(e.currentTarget, async () => {
+        const r = await api('POST', '/api/automod/words', { word: x, add: false }); toast(r.message); show('AutoMod');
+      }) }, '×')))) : empty('Noch keine eigenen Wörter.'),
+    field('Neues Wort', w),
+    h('div', { class: 'btns end' }, btn('Hinzufügen', async () => {
+      const r = await api('POST', '/api/automod/words', { word: w.value, add: true }); toast(r.message); show('AutoMod');
+    }, 'primary'))));
+}
+
+// ───────── Ticket-Fragen ─────────
+async function vTicketQs(root) {
+  const cats = await api('GET', '/api/ticketquestions');
+  root.append(card('So läuft ein Ticket ab', 'Der Ticket-Assistent fragt immer zuerst den Minecraft-Namen und lässt dann die Kategorie wählen. Danach stellt er die Fragen der gewählten Kategorie und fasst alles für das Team zusammen. Hier änderst du diese Fragen. Mit „zurück“ können Spieler ihre letzte Antwort ändern.',
+    h('div', { class: 'chips' }, Object.values(cats).map((c) => h('span', { class: 'chip' }, c.emoji + ' ' + c.label)))));
+
+  for (const [key, cat] of Object.entries(cats)) {
+    const rows = cat.qs.map((q) => ({ label: q.label, q: q.q, optional: !!q.optional }));
+    const list = h('div');
+    const render = () => {
+      list.replaceChildren(...rows.map((r, i) => {
+        const label = h('input', { value: r.label, placeholder: 'Kurzer Titel für die Zusammenfassung', maxlength: '45' });
+        const q = h('textarea', { rows: 2 }, r.q);
+        const opt = makeSwitch('Optional', r.optional, 'Spieler können die Frage mit „-“ überspringen.');
+        label.addEventListener('input', () => { r.label = label.value; });
+        q.addEventListener('input', () => { r.q = q.value; });
+        opt.input.addEventListener('change', () => { r.optional = opt.input.checked; });
+        return h('div', { class: 'editor' },
+          h('div', { class: 'row between', style: 'margin-bottom:10px' }, h('b', {}, `Frage ${i + 3}`),
+            h('div', { class: 'btns' },
+              i > 0 ? h('button', { class: 'btn sm', title: 'Nach oben', onclick: () => { [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]]; render(); } }, '↑') : '',
+              i < rows.length - 1 ? h('button', { class: 'btn sm', title: 'Nach unten', onclick: () => { [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]]; render(); } }, '↓') : '',
+              rows.length > 1 ? h('button', { class: 'btn sm danger', title: 'Frage entfernen', onclick: () => { rows.splice(i, 1); render(); } }, '×') : '')),
+          field('Titel', label), field('Frage an den Spieler', q), opt.el);
+      }));
+    };
+    render();
+    root.append(card(`${cat.emoji} ${cat.label}`, cat.custom ? 'Angepasste Fragen' : 'Standardfragen',
+      list,
+      h('div', { class: 'btns end' },
+        rows.length < 8 ? h('button', { class: 'btn', onclick: () => { rows.push({ label: '', q: '', optional: false }); render(); } }, '＋ Frage hinzufügen') : '',
+        cat.custom ? btn('Auf Standard zurücksetzen', async () => {
+          if (!(await ask('Zurücksetzen?', 'Die Standardfragen für diese Kategorie werden wiederhergestellt.', 'Zurücksetzen'))) return;
+          await api('DELETE', '/api/ticketquestions/' + key); toast('Zurückgesetzt'); show('Ticket-Fragen');
+        }) : '',
+        btn('Speichern', async () => {
+          await api('PUT', '/api/ticketquestions/' + key, { qs: rows });
+          toast('Gespeichert'); show('Ticket-Fragen');
+        }, 'primary'))));
+  }
+}
+
+// ───────── Tickets ─────────
+async function vTickets(root) {
+  const list = await api('GET', '/api/tickets');
+  root.append(card('Offene Tickets und Bewerbungen', '', list.length ? list.map((t) => h('div', { class: 'item' },
+    h('div', { class: 't' }, h('b', {}, '#' + t.name),
+      h('small', {}, `${t.type === 'apply' ? '📝 Bewerbung' : '🎫 Ticket'} von ${t.user} · ${new Date(t.created).toLocaleString('de-DE')}`)),
+    btn('Schließen', async () => {
+      if (!(await ask('Ticket schließen?', 'Der Kanal wird gelöscht.', 'Schließen'))) return;
+      await api('POST', `/api/tickets/${t.id}/close`); toast('Geschlossen'); show('Tickets');
+    }, 'sm danger'))) : empty('Keine offenen Tickets. 🎉')));
+}
+
+// ───────── Twitch ─────────
+async function vTwitch(root) {
+  const d = await api('GET', '/api/twitch');
+  const name = h('input', { placeholder: 'Twitch-Name oder Link' });
+  const warn = [];
+  if (!d.configured) warn.push('⚠️ Es fehlen TWITCH_CLIENT_ID und TWITCH_CLIENT_SECRET in Railway. Ohne sie werden keine Meldungen gesendet.');
+  if (!d.hasChannel) warn.push('⚠️ Es gibt noch keinen Twitch-Kanal. Führe zuerst das Setup aus.');
+  root.append(card('Twitch Live-Benachrichtigung', 'Geht ein Kanal live, postet der Bot in 📺・twitch-live und pingt 🔔 Twitch Notify. Geprüft wird jede Minute.',
+    warn.map((w) => h('p', { class: 'error' }, w)),
+    field('Neuer Kanal', name),
+    h('div', { class: 'btns end' }, btn('Hinzufügen', async () => { await api('POST', '/api/twitch', { name: name.value }); toast('Hinzugefügt'); show('Twitch'); }, 'primary'))));
+  root.append(card('Überwachte Kanäle', '', d.channels.length ? d.channels.map((n) => h('div', { class: 'item' },
+    h('div', { class: 't' }, h('b', {}, n)), badge(d.live.includes(n) ? '🔴 Live' : 'Offline', d.live.includes(n) ? 'bad' : ''),
+    btn('Entfernen', async () => { await api('DELETE', '/api/twitch/' + encodeURIComponent(n)); show('Twitch'); }, 'sm danger')))
+    : empty('Noch keine Kanäle eingetragen.')));
+}
+
+// ───────── Giveaways ─────────
+async function vGiveaways(root) {
+  const [list, chs] = await Promise.all([api('GET', '/api/giveaways'), getChans()]);
+  const prize = h('input', { placeholder: 'z. B. Premium-Rang' });
+  const dur = h('input', { placeholder: '30m, 2h, 1d, 1d12h' });
+  const win = h('input', { type: 'number', min: '1', max: '20', value: '1' });
+  const ch = chanSelect(chs);
+  root.append(card('Neues Giveaway', 'Mitglieder nehmen per Button teil, der Bot lost am Ende die Gewinner.',
+    field('Preis', prize), h('div', { class: 'three' }, field('Dauer', dur), field('Gewinner', win), field('Kanal', ch)),
+    h('div', { class: 'btns end' }, btn('🎁 Giveaway starten', async () => {
+      await api('POST', '/api/giveaways', { prize: prize.value, duration: dur.value, winners: win.value, channelId: ch.value });
+      toast('Giveaway gestartet'); show('Giveaways');
+    }, 'primary'))));
+  root.append(card('Alle Giveaways', '', list.length ? list.map((g) => h('div', { class: 'item' },
+    h('div', { class: 't' }, h('b', {}, g.prize),
+      h('small', {}, `#${g.channel} · ${g.entries} Teilnehmer · ${g.winners} Gewinner · ` + (g.ended ? 'beendet' : 'endet ' + new Date(g.endsAt).toLocaleString('de-DE'))),
+      g.ended ? h('small', {}, '🏆 ' + (g.winnerNames.length ? g.winnerNames.join(', ') : 'keine Gewinner')) : ''),
+    h('div', { class: 'btns' },
+      g.ended
+        ? btn('Neu losen', async () => { const r = await api('POST', `/api/giveaways/${g.id}/reroll`); toast('Neue Gewinner: ' + (r.winners.length || 'keine')); show('Giveaways'); }, 'sm')
+        : btn('Jetzt beenden', async () => { const r = await api('POST', `/api/giveaways/${g.id}/end`); toast('Gewinner gezogen: ' + r.winners.length); show('Giveaways'); }, 'sm primary'),
+      btn('Löschen', async () => {
+        if (!(await ask('Giveaway löschen?', 'Das Giveaway samt Nachricht wird gelöscht.'))) return;
+        await api('DELETE', `/api/giveaways/${g.id}`); show('Giveaways');
+      }, 'sm danger')))) : empty('Noch keine Giveaways.')));
+}
+
+// ───────── Navigation, Themes, Suche ─────────
+const NAV = [
+  ['Allgemein', [['Übersicht', '🏠', vOverview], ['Server', '🛠️', vServer]]],
+  ['Community', [['Rollen & Mitglieder', '🎭', vRoles], ['XP & Level', '⭐', vXp], ['Giveaways', '🎁', vGiveaways], ['Twitch', '📺', vTwitch], ['Willkommen', '👋', vWelcome], ['Nachrichten', '📢', vAnnounce]]],
+  ['Support', [['Panels', '🧩', vPanels], ['Tickets', '🎫', vTickets], ['Ticket-Fragen', '📝', vTicketQs], ['Auto-Antworten', '💬', vFaq]]],
+  ['Moderation', [['Moderation', '🛡️', vModeration], ['AutoMod', '🤖', vAutomod]]],
+];
+const views = {}, icons = {};
+let current = 'Übersicht';
+
+async function show(name) {
+  current = name;
+  document.body.classList.remove('nav-open');
+  $('title').textContent = name;
+  for (const b of $('nav').querySelectorAll('.nav-btn')) b.classList.toggle('on', b.dataset.name === name);
+  main.replaceChildren(h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' }));
+  const root = h('div');
+  try {
+    await views[name](root);
+    if (current === name) main.replaceChildren(root);
+  } catch (e) {
+    main.replaceChildren(card('Fehler', '', h('p', { class: 'error' }, e.message)));
+  }
+}
+
+const ACCENTS = { Violett: ['#6c7bff', '#8f6bff'], Blau: ['#3b9cff', '#5865f2'], Grün: ['#2fd08a', '#18b6a3'], Rosa: ['#ff6fae', '#c86bff'], Orange: ['#ffa24c', '#ff6b6b'] };
+function applyTheme() {
+  const root = document.documentElement;
+  root.dataset.theme = store.get('theme', 'auto');
+  const [a1, a2] = ACCENTS[store.get('accent', 'Violett')] || ACCENTS.Violett;
+  root.style.setProperty('--accent', a1);
+  root.style.setProperty('--accent2', a2);
+}
+function buildThemes() {
+  const box = $('themes');
+  const render = () => {
+    const t = store.get('theme', 'auto'), a = store.get('accent', 'Violett');
+    box.replaceChildren(
+      ...[['auto', '🌓'], ['light', '☀️'], ['dark', '🌙']].map(([k, ic]) => h('button', { class: t === k ? 'on' : '', title: k, onclick: () => { store.set('theme', k); applyTheme(); render(); } }, ic)),
+      ...Object.entries(ACCENTS).map(([k, [c1, c2]]) => h('button', { class: 'sw ' + (a === k ? 'on' : ''), title: k, style: `background:linear-gradient(135deg,${c1},${c2})`,
+        onclick: () => { store.set('accent', k); applyTheme(); render(); } })));
+  };
+  render();
+}
+
+function openPalette() {
+  const input = h('input', { placeholder: 'Seite suchen …', class: 'pal-input' });
+  const list = h('div');
+  let items = [], sel = 0;
+  const all = Object.keys(views).map((n) => ({ name: n, icon: icons[n] }));
+  const go = (n) => { overlay.remove(); show(n); };
+  const render = () => {
+    const q = (input.value || '').toLowerCase();
+    items = all.filter((x) => x.name.toLowerCase().includes(q));
+    sel = Math.min(sel, Math.max(items.length - 1, 0));
+    list.replaceChildren(...items.map((x, i) => h('button', { class: 'pal-item' + (i === sel ? ' on' : ''), onclick: () => go(x.name) }, h('span', {}, x.icon), x.name)));
+  };
+  const overlay = h('div', { class: 'overlay top', onclick: (e) => { if (e.target === overlay) overlay.remove(); } }, h('div', { class: 'modal pal' }, input, list));
+  input.addEventListener('input', () => { sel = 0; render(); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { sel = Math.min(sel + 1, items.length - 1); render(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { sel = Math.max(sel - 1, 0); render(); e.preventDefault(); }
+    else if (e.key === 'Enter' && items[sel]) go(items[sel].name);
+    else if (e.key === 'Escape') overlay.remove();
+  });
+  render();
+  document.body.append(overlay);
+  setTimeout(() => { if (input.focus) input.focus(); }, 0);
+}
+
+(async function init() {
+  applyTheme();
+  try {
+    me = await api('GET', '/api/me');
+    $('user').append(
+      me.avatar ? h('img', { src: `https://cdn.discordapp.com/avatars/${me.id}/${me.avatar}.png?size=64`, alt: '' }) : '',
+      h('div', {}, h('b', {}, me.name), h('a', { href: '/logout' }, 'Abmelden')));
+    for (const [group, items] of NAV) {
+      $('nav').append(h('div', { class: 'grp' }, group));
+      for (const [name, icon, fn] of items) {
+        views[name] = fn; icons[name] = icon;
+        $('nav').append(h('button', { class: 'nav-btn', 'data-name': name, onclick: () => show(name) }, h('span', {}, icon), name));
+      }
+    }
+    buildThemes();
+    $('menu').addEventListener('click', () => document.body.classList.toggle('nav-open'));
+    $('scrim').addEventListener('click', () => document.body.classList.remove('nav-open'));
+    $('search').addEventListener('click', openPalette);
+    document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); } });
+    show('Übersicht');
+  } catch (e) {
+    main.replaceChildren(card('Fehler', '', h('p', { class: 'error' }, e.message), h('a', { href: '/logout' }, 'Abmelden')));
+  }
+})();
+</script>
+</body>
+</html>
