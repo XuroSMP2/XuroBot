@@ -10,7 +10,10 @@ const {
   AutoModerationRuleKeywordPresetType, ContextMenuCommandBuilder, ApplicationCommandType, StringSelectMenuBuilder,
 } = require('discord.js');
 const mc = require('minecraft-server-util');
-const startDashboard = require('./dashboard');
+let startDashboard = () => {}, dashboardLoaded = false;
+try { startDashboard = require('./dashboard'); dashboardLoaded = true; } catch (e) {
+  console.error(`⚠️ Die Website konnte nicht geladen werden (${e.message}). Der Bot läuft ohne sie weiter. Fehlt "express" in der package.json?`);
+}
 
 const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID, MC_HOST = 'play.xurosmp.net', MC_PORT = '25565' } = process.env;
 const COLOR = 0x57f287;
@@ -155,6 +158,22 @@ const commands = [
       .addStringOption((o) => o.setName('wort').setDescription('Wort').setRequired(true).setMaxLength(60)))
     .addSubcommand((s) => s.setName('wort_entfernen').setDescription('Ein Wort wieder erlauben')
       .addStringOption((o) => o.setName('wort').setDescription('Wort').setRequired(true).setMaxLength(60)))
+    .setDefaultMemberPermissions(P.ManageGuild),
+  new SlashCommandBuilder().setName('info').setDescription('Infos zum Bot (Laufzeit, Ping, Speicher)'),
+  new SlashCommandBuilder().setName('statuspanel').setDescription('Erstellt ein Live-Status-Panel für den Minecraft-Server')
+    .addChannelOption((o) => o.setName('kanal').setDescription('Kanal (Standard: dieser Kanal)').addChannelTypes(ChannelType.GuildText))
+    .setDefaultMemberPermissions(P.ManageGuild),
+  new SlashCommandBuilder().setName('vorschlag').setDescription('Reiche einen Vorschlag ein')
+    .addStringOption((o) => o.setName('text').setDescription('Dein Vorschlag').setRequired(true).setMinLength(5).setMaxLength(1000)),
+  new SlashCommandBuilder().setName('event').setDescription('Events mit Anmeldung verwalten')
+    .addSubcommand((s) => s.setName('erstellen').setDescription('Neues Event erstellen')
+      .addStringOption((o) => o.setName('titel').setDescription('Name des Events').setRequired(true).setMaxLength(100))
+      .addStringOption((o) => o.setName('in').setDescription('Startet in … (z. B. 2h, 1d, 1d12h)').setRequired(true).setMaxLength(20))
+      .addStringOption((o) => o.setName('beschreibung').setDescription('Beschreibung').setMaxLength(1000))
+      .addChannelOption((o) => o.setName('kanal').setDescription('Kanal (Standard: Event-Kanal)').addChannelTypes(ChannelType.GuildText))
+      .addRoleOption((o) => o.setName('ping').setDescription('Rolle, die gepingt wird')))
+    .addSubcommand((s) => s.setName('absagen').setDescription('Event löschen')
+      .addStringOption((o) => o.setName('nachricht').setDescription('Nachrichten-ID oder Nachrichten-Link').setRequired(true)))
     .setDefaultMemberPermissions(P.ManageGuild),
   new SlashCommandBuilder().setName('backup').setDescription('Sichert alle Bot-Daten sofort im Kanal 💾・backup')
     .setDefaultMemberPermissions(P.Administrator),
@@ -305,11 +324,13 @@ async function updateServerStats(guild) {
   set(statBots, `🤖・Bots: ${bots}`);
 }
 
-async function log(guild, text) {
+async function log(guild, text, opts = {}) {
   const c0 = cfg(guild.id);
-  (c0.activity ??= []).unshift({ t: Date.now(), text: String(text).slice(0, 300) });
-  if (c0.activity.length > 100) c0.activity.length = 100;
-  saveSoon();
+  if (opts.feed !== false) {
+    (c0.activity ??= []).unshift({ t: Date.now(), text: String(text).slice(0, 300) });
+    if (c0.activity.length > 100) c0.activity.length = 100;
+    saveSoon();
+  }
   const id = c0.channels.logs;
   const ch = id && guild.channels.cache.get(id);
   if (ch) ch.send({ embeds: [new EmbedBuilder().setColor(0x5865f2).setDescription(text).setTimestamp()] }).catch(() => {});
@@ -450,6 +471,7 @@ async function runSetup(guild) {
   const rules = await text('📜・regeln', info, pub);
   const news = await text('📢・ankündigungen', info, pub);
   const ipCh = await text('🌍・server-ip', info, pub);
+  const statusCh = await text('🟢・server-status', info, pub);
   const welcome = await text('👋・willkommen', info, pub);
   const stats = await voice('📊・Spieler: …', info, [{ id: everyone.id, allow: [V], deny: [P.Connect] }]);
   // COMMUNITY
@@ -461,6 +483,8 @@ async function runSetup(guild) {
   const twitchCh = await text('📺・twitch-live', comm, privRO);
   const rolesCh = await text('🔔・rollen', comm, privRO);
   const levelsCh = await text('📈・level-ups', comm, privRO);
+  const suggestionsCh = await text('💡・vorschläge', comm, privRO);
+  const eventsCh = await text('📅・events', comm, privRO);
   // VIP (Premium / Elite)
   const vipOw = (roles) => [{ id: everyone.id, deny: [V] },
     ...[...roles, mod, admin, owner].map((r) => ({ id: r.id, allow: [V, S, H] }))];
@@ -514,6 +538,10 @@ async function runSetup(guild) {
   });
   await levelsCh.send({ embeds: [new EmbedBuilder().setColor(0x57f287).setTitle('📈 Level-Ups')
     .setDescription('Sammle XP durch Schreiben und in den Sprachkanälen. Mit `/rank` siehst du deinen Stand, mit `/leaderboard` die Top 10.')] });
+  await suggestionsCh.send({ embeds: [new EmbedBuilder().setColor(0xf1c40f).setTitle('💡 Vorschläge')
+    .setDescription('Hast du eine Idee für den Server? Schreibe `/vorschlag` und dein Text erscheint hier. Alle können mit 👍 und 👎 abstimmen, das Team entscheidet am Ende.')] });
+  await eventsCh.send({ embeds: [new EmbedBuilder().setColor(0x6c7bff).setTitle('📅 Events')
+    .setDescription('Hier erscheinen alle Events. Melde dich per Button an, kurz vor dem Start erinnert dich der Bot.')] });
   await giveawaysCh.send({ embeds: [new EmbedBuilder().setColor(0xf1c40f).setTitle('🎁 Giveaways')
     .setDescription('Hier erscheinen alle Giveaways. Klicke auf **🎉 Teilnehmen** und viel Glück!')] });
   await twitchCh.send({ embeds: [new EmbedBuilder().setColor(0x9146ff).setTitle('📺 Twitch Live')
@@ -528,7 +556,9 @@ async function runSetup(guild) {
     welcome: welcome.id, rules: rules.id, logs: logs.id, news: news.id, stats: stats.id, j2c: j2c.id, support: sup.id,
     statTeam: statTeam.id, statMembers: statMembers.id, statBots: statBots.id,
     giveaways: giveawaysCh.id, twitch: twitchCh.id, levels: levelsCh.id,
+    status: statusCh.id, suggestions: suggestionsCh.id, events: eventsCh.id,
   };
+  await createStatusPanel(guild, statusCh).catch((e) => console.error('Status-Panel:', e.message));
   save();
   await setupAutoMod(guild).catch((e) => console.error('AutoMod:', e.message));
   giveAllPlayerRole(guild).catch((e) => console.error('Rollen:', e.message));
@@ -556,7 +586,7 @@ async function runReset(guild, deleteRoles) {
     c.roles = {};
   }
   await removeAutoMod(guild).catch(() => {});
-  c.temp = {}; c.channels = {}; c.panels = []; c.giveaways = {}; c.created = { channels: [], roles: [] };
+  c.temp = {}; c.channels = {}; c.panels = []; c.giveaways = {}; c.events = {}; c.suggestions = {}; c.statusPanel = null; c.created = { channels: [], roles: [] };
   save();
   return { n, r, f };
 }
@@ -957,6 +987,229 @@ async function xpVoiceTick() {
   }
 }
 
+// ───────────── Live-Status-Panel ─────────────
+async function statusEmbed() {
+  const { online, res } = await getStatus();
+  const addr = `${MC_HOST}${MC_PORT === '25565' ? '' : ':' + MC_PORT}`;
+  const e = new EmbedBuilder().setTitle('⛏️ xurosmp Live-Status').setColor(online ? 0x3ecf8e : 0xed4245).setTimestamp();
+  if (online) {
+    const names = (res.players.sample ?? []).map((p) => p.name).filter(Boolean).slice(0, 20);
+    e.addFields({ name: 'Status', value: '🟢 Online', inline: true }, { name: '👥 Spieler', value: `${res.players.online}/${res.players.max}`, inline: true },
+      { name: '📦 Version', value: res.version.name, inline: true }, { name: '🌐 IP', value: `\`${addr}\`` });
+    if (names.length) e.addFields({ name: 'Gerade online', value: names.join(', ').slice(0, 1000) });
+  } else {
+    e.addFields({ name: 'Status', value: '🔴 Offline', inline: true }, { name: '🌐 IP', value: `\`${addr}\`` });
+  }
+  return e.setFooter({ text: 'Aktualisiert sich jede Minute' });
+}
+
+async function createStatusPanel(guild, channel) {
+  const c = cfg(guild.id);
+  const old = c.statusPanel;
+  if (old) {
+    const oc = guild.channels.cache.get(old.channelId);
+    const om = oc && await oc.messages.fetch(old.messageId).catch(() => null);
+    if (om) await om.delete().catch(() => {});
+  }
+  const msg = await channel.send({ embeds: [await statusEmbed()] });
+  c.statusPanel = { channelId: channel.id, messageId: msg.id };
+  save();
+  return msg;
+}
+
+async function updateStatusPanels() {
+  const panels = [...client.guilds.cache.values()].map((g) => [g, cfg(g.id).statusPanel]).filter(([, p]) => p);
+  if (!panels.length) return;
+  const embed = await statusEmbed();
+  for (const [guild, p] of panels) {
+    const ch = guild.channels.cache.get(p.channelId);
+    const msg = ch && await ch.messages.fetch(p.messageId).catch(() => null);
+    if (msg) await msg.edit({ embeds: [embed] }).catch(() => {});
+  }
+}
+
+// ───────────── Events mit Anmeldung ─────────────
+function evEmbed(e) {
+  const ts = Math.floor(e.at / 1000);
+  const list = (a) => (a.length ? a.map((id) => `<@${id}>`).join(', ').slice(0, 900) : '–');
+  return new EmbedBuilder().setColor(e.ended ? 0x95a5a6 : 0x6c7bff).setTitle(`📅 ${e.title}`)
+    .setDescription(`${e.desc ? `${e.desc}\n\n` : ''}🕒 <t:${ts}:F> (<t:${ts}:R>)\n👤 Veranstalter: <@${e.host}>${e.ended ? '\n\n🏁 **Beendet**' : ''}`)
+    .addFields({ name: `✅ Dabei (${e.yes.length})`, value: list(e.yes) }, { name: `❔ Vielleicht (${e.maybe.length})`, value: list(e.maybe) },
+      { name: `❌ Absage (${e.no.length})`, value: list(e.no) });
+}
+
+const evRow = (disabled = false) => new ActionRowBuilder().addComponents(
+  new ButtonBuilder().setCustomId('ev_yes').setLabel('Dabei').setEmoji('✅').setStyle(ButtonStyle.Success).setDisabled(disabled),
+  new ButtonBuilder().setCustomId('ev_maybe').setLabel('Vielleicht').setEmoji('❔').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
+  new ButtonBuilder().setCustomId('ev_no').setLabel('Absage').setEmoji('❌').setStyle(ButtonStyle.Danger).setDisabled(disabled));
+
+async function createEvent(guild, channel, { title, desc, at, hostId, pingRoleId }) {
+  const e = { channelId: channel.id, title: String(title).trim().slice(0, 100), desc: String(desc || '').trim().slice(0, 1000), at, host: hostId,
+    yes: [], maybe: [], no: [], reminded: false, ended: false };
+  const role = pingRoleId ? guild.roles.cache.get(pingRoleId) : null;
+  const msg = await channel.send({ content: role ? `<@&${role.id}>` : undefined, embeds: [evEmbed(e)], components: [evRow()],
+    allowedMentions: { roles: role ? [role.id] : [] } });
+  (cfg(guild.id).events ??= {})[msg.id] = e;
+  save();
+  return msg;
+}
+
+async function cancelEvent(guild, id) {
+  const c = cfg(guild.id);
+  const e = c.events?.[id];
+  if (!e) return false;
+  const ch = guild.channels.cache.get(e.channelId);
+  const msg = ch && await ch.messages.fetch(id).catch(() => null);
+  if (msg) await msg.delete().catch(() => {});
+  delete c.events[id]; save();
+  return true;
+}
+
+async function checkEvents() {
+  for (const guild of client.guilds.cache.values()) {
+    const c = cfg(guild.id);
+    for (const [id, e] of Object.entries(c.events ?? {})) {
+      const ch = guild.channels.cache.get(e.channelId);
+      if (!e.reminded && !e.ended && e.at - Date.now() <= 15 * 60_000 && e.at > Date.now()) {
+        e.reminded = true; save();
+        const users = [...new Set([...e.yes, ...e.maybe])].slice(0, 80);
+        if (ch) {
+          await ch.send({ content: `⏰ **${e.title}** startet <t:${Math.floor(e.at / 1000)}:R>!${users.length ? `\n${users.map((u) => `<@${u}>`).join(' ')}` : ''}`,
+            allowedMentions: { users } }).catch(() => {});
+        }
+      }
+      if (!e.ended && Date.now() > e.at + 2 * 3600_000) {
+        e.ended = true; save();
+        const msg = ch && await ch.messages.fetch(id).catch(() => null);
+        if (msg) await msg.edit({ embeds: [evEmbed(e)], components: [evRow(true)] }).catch(() => {});
+      }
+      if (e.ended && Date.now() > e.at + 7 * 86400_000) { delete c.events[id]; save(); }
+    }
+  }
+}
+
+// ───────────── Vorschläge ─────────────
+const sugCooldown = new Map();
+function sugEmbed(sg) {
+  const color = { open: 0xf1c40f, accepted: 0x3ecf8e, declined: 0xed4245 }[sg.status];
+  const e = new EmbedBuilder().setColor(color).setTitle('💡 Vorschlag').setDescription(`${sg.text}\n\nVon <@${sg.by}>`)
+    .addFields({ name: '👍 Dafür', value: String(sg.up.length), inline: true }, { name: '👎 Dagegen', value: String(sg.down.length), inline: true });
+  if (sg.status !== 'open') {
+    e.addFields({ name: sg.status === 'accepted' ? '✅ Angenommen' : '❌ Abgelehnt', value: sg.reason || 'Keine Begründung.' });
+  }
+  return e;
+}
+function sugRows(sg) {
+  const open = sg.status === 'open';
+  const rows = [new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('sg_up').setEmoji('👍').setLabel('Dafür').setStyle(ButtonStyle.Success).setDisabled(!open),
+    new ButtonBuilder().setCustomId('sg_down').setEmoji('👎').setLabel('Dagegen').setStyle(ButtonStyle.Danger).setDisabled(!open))];
+  if (open) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('sg_accept').setLabel('Annehmen (Team)').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('sg_decline').setLabel('Ablehnen (Team)').setStyle(ButtonStyle.Secondary)));
+  }
+  return rows;
+}
+
+async function createSuggestion(guild, channel, user, text) {
+  const sg = { text: String(text).trim().slice(0, 1000), by: user.id, up: [], down: [], status: 'open', reason: '', channelId: channel.id };
+  const msg = await channel.send({ embeds: [sugEmbed(sg)], components: sugRows(sg), allowedMentions: { parse: [] } });
+  (cfg(guild.id).suggestions ??= {})[msg.id] = sg;
+  save();
+  return msg;
+}
+
+async function decideSuggestion(guild, id, status, reason) {
+  const sg = cfg(guild.id).suggestions?.[id];
+  if (!sg) throw new Error('Vorschlag nicht gefunden.');
+  if (sg.status !== 'open') throw new Error('Über diesen Vorschlag wurde schon entschieden.');
+  if (!['accepted', 'declined'].includes(status)) throw new Error('Unbekannter Status.');
+  sg.status = status; sg.reason = String(reason || '').trim().slice(0, 500); save();
+  const ch = guild.channels.cache.get(sg.channelId);
+  const msg = ch && await ch.messages.fetch(id).catch(() => null);
+  if (msg) await msg.edit({ embeds: [sugEmbed(sg)], components: sugRows(sg), allowedMentions: { parse: [] } }).catch(() => {});
+  client.users.fetch(sg.by).then((u) => u.send(`💡 Dein Vorschlag auf **${guild.name}** wurde ${status === 'accepted' ? '**angenommen** ✅' : '**abgelehnt** ❌'}${sg.reason ? `: ${sg.reason}` : '.'}`)).catch(() => {});
+  log(guild, `💡 Vorschlag ${status === 'accepted' ? 'angenommen' : 'abgelehnt'}: ${sg.text.slice(0, 80)}`);
+}
+
+// ───────────── Ticket-Transkript ─────────────
+async function saveTranscript(guild, ch, closedBy) {
+  const logCh = guild.channels.cache.get(cfg(guild.id).channels.logs);
+  if (!logCh) return;
+  const all = [];
+  let before;
+  for (let n = 0; n < 5; n++) {   // bis zu 500 Nachrichten
+    const batch = await ch.messages.fetch({ limit: 100, before }).catch(() => null);
+    if (!batch?.size) break;
+    all.push(...batch.values());
+    before = batch.last().id;
+    if (batch.size < 100) break;
+  }
+  const lines = all.reverse().map((m) => {
+    const t = new Date(m.createdTimestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });
+    const e = m.embeds[0] ? ` [Embed: ${(m.embeds[0].title || m.embeds[0].description || '').slice(0, 200).replace(/\n/g, ' ')}]` : '';
+    const f = m.attachments.size ? ` [Anhänge: ${[...m.attachments.values()].map((a) => a.url).join(' ')}]` : '';
+    return `[${t}] ${m.author.tag}: ${m.content || ''}${e}${f}`;
+  });
+  if (!lines.length) return;
+  await logCh.send({
+    content: `🗂️ Transkript von **#${ch.name}** (geschlossen von ${closedBy})`,
+    files: [{ attachment: Buffer.from(lines.join('\n'), 'utf8'), name: `transkript-${ch.name}.txt` }],
+    allowedMentions: { parse: [] },
+  }).catch(() => {});
+}
+
+// ───────────── Join-Schutz / Raid-Erkennung ─────────────
+const SHIELD_DEFAULTS = { minAgeDays: 0, raidOn: true, raidJoins: 6, raidSeconds: 10, raidKick: false };
+const shieldConfig = (c) => ({ ...SHIELD_DEFAULTS, ...(c.shield ?? {}) });
+const recentJoins = new Map(), raidAlertAt = new Map();
+
+async function alertTeam(guild, text) {
+  const c = cfg(guild.id);
+  (c.activity ??= []).unshift({ t: Date.now(), text: String(text).slice(0, 300) });
+  saveSoon();
+  const ch = guild.channels.cache.get(c.channels.logs);
+  if (!ch) return;
+  const roles = [c.roles.admin, c.roles.mod].filter(Boolean);
+  await ch.send({ content: `${roles.map((r) => `<@&${r}>`).join(' ')} ${text}`.trim(), allowedMentions: { roles } }).catch(() => {});
+}
+
+// gibt true zurück, wenn das Mitglied entfernt wurde
+async function checkJoinShield(member) {
+  if (member.user.bot) return false;
+  const guild = member.guild, sh = shieldConfig(cfg(guild.id));
+  const ageDays = (Date.now() - member.user.createdTimestamp) / 86400_000;
+  if (sh.minAgeDays > 0 && ageDays < sh.minAgeDays) {
+    await member.send(`Dein Discord-Account ist zu neu für **${guild.name}** (mindestens ${sh.minAgeDays} Tage alt). Versuche es später noch einmal.`).catch(() => {});
+    const ok = await member.kick('Join-Schutz: Account zu neu').then(() => true).catch(() => false);
+    log(guild, `🛡️ ${member.user.tag} ${ok ? 'abgewiesen' : 'verdächtig (Kick nicht möglich)'}: Account nur ${ageDays.toFixed(1)} Tage alt.`);
+    return ok;
+  }
+  if (!sh.raidOn) return false;
+  const now = Date.now();
+  if (sh.raidKick && now - (raidAlertAt.get(guild.id) ?? 0) < 5 * 60_000) {   // Raid läuft noch
+    const ok = await member.kick('Join-Schutz: Raid-Verdacht').then(() => true).catch(() => false);
+    if (ok) return true;
+  }
+  const list = (recentJoins.get(guild.id) ?? []).filter((j) => now - j.t < sh.raidSeconds * 1000);
+  list.push({ id: member.id, t: now });
+  recentJoins.set(guild.id, list);
+  if (list.length >= sh.raidJoins && now - (raidAlertAt.get(guild.id) ?? 0) > 5 * 60_000) {
+    raidAlertAt.set(guild.id, now);
+    await alertTeam(guild, `🚨 **Raid-Verdacht:** ${list.length} Beitritte in ${sh.raidSeconds} Sekunden.${sh.raidKick ? ' Die neuen Mitglieder werden gekickt.' : ' Bitte prüfe die neuen Mitglieder.'}`);
+    if (sh.raidKick) {
+      let removed = false;
+      for (const j of list) {
+        const m = await guild.members.fetch(j.id).catch(() => null);
+        if (m?.kickable && await m.kick('Join-Schutz: Raid-Verdacht').then(() => true).catch(() => false) && j.id === member.id) removed = true;
+      }
+      return removed;
+    }
+  }
+  return false;
+}
+
 // ───────────── Twitch Live-Benachrichtigung ─────────────
 const { TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET } = process.env;
 let twitchToken = null, twitchTokenExp = 0;
@@ -1326,6 +1579,11 @@ client.on('interactionCreate', async (i) => {
     }
     if (i.isModalSubmit() && i.customId === 'apply_modal') return handleApplication(i, c);
     if (i.isModalSubmit() && i.customId.startsWith('reset_modal:')) return handleResetModal(i);
+    if (i.isModalSubmit() && i.customId.startsWith('sg_modal:')) {
+      if (!i.member.permissions.has(P.ModerateMembers)) return reply(i, '❌ Nur das Team kann Vorschläge entscheiden.');
+      await decideSuggestion(i.guild, i.message.id, i.customId.split(':')[1], i.fields.getTextInputValue('reason'));
+      return reply(i, '✅ Entscheidung gespeichert.');
+    }
     if (i.isModalSubmit() && i.customId.startsWith('panel_edit:')) return handlePanelEdit(i);
     if (i.isMessageContextMenuCommand() && i.commandName === 'Panel bearbeiten') return openPanelEditor(i, i.targetMessage);
 
@@ -1376,6 +1634,33 @@ client.on('interactionCreate', async (i) => {
         client.users.fetch(uid).then((u) => u.send(`Deine Bewerbung bei xurosmp wurde **${word}**.`)).catch(() => {});
         log(i.guild, `📝 Bewerbung von <@${uid}> ${word} durch ${i.user}.`);
         return;
+      }
+      if (['ev_yes', 'ev_maybe', 'ev_no'].includes(i.customId)) {
+        const e = c.events?.[i.message.id];
+        if (!e || e.ended) return reply(i, 'Dieses Event ist beendet.');
+        const key = i.customId.slice(3);
+        const had = e[key].includes(i.user.id);
+        for (const k of ['yes', 'maybe', 'no']) e[k] = e[k].filter((id) => id !== i.user.id);
+        if (!had) e[key].push(i.user.id);
+        save();
+        return i.update({ embeds: [evEmbed(e)] });
+      }
+      if (i.customId === 'sg_up' || i.customId === 'sg_down') {
+        const sg = c.suggestions?.[i.message.id];
+        if (!sg || sg.status !== 'open') return reply(i, 'Über diesen Vorschlag wird nicht mehr abgestimmt.');
+        const mine = i.customId === 'sg_up' ? 'up' : 'down', other = mine === 'up' ? 'down' : 'up';
+        sg[other] = sg[other].filter((id) => id !== i.user.id);
+        sg[mine] = sg[mine].includes(i.user.id) ? sg[mine].filter((id) => id !== i.user.id) : [...sg[mine], i.user.id];
+        save();
+        return i.update({ embeds: [sugEmbed(sg)] });
+      }
+      if (i.customId === 'sg_accept' || i.customId === 'sg_decline') {
+        if (!i.member.permissions.has(P.ModerateMembers)) return reply(i, '❌ Nur das Team kann Vorschläge entscheiden.');
+        const acc = i.customId === 'sg_accept';
+        return i.showModal(new ModalBuilder().setCustomId(`sg_modal:${acc ? 'accepted' : 'declined'}`)
+          .setTitle(acc ? 'Vorschlag annehmen' : 'Vorschlag ablehnen')
+          .addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('reason').setLabel('Begründung (optional)')
+            .setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500))));
       }
       if (i.customId.startsWith('rr:')) {
         const role = i.guild.roles.cache.get(i.customId.slice(3));
@@ -1453,6 +1738,7 @@ client.on('interactionCreate', async (i) => {
           || i.member.permissions.has(P.Administrator);
         if (!allowed) return reply(i, 'Dafür fehlt dir die Berechtigung.');
         await i.reply('Ticket wird in 5 Sekunden gelöscht …');
+        await saveTranscript(i.guild, i.channel, i.user.tag).catch(() => {});
         log(i.guild, `🔒 Ticket #${i.channel.name} von ${i.user} geschlossen.`);
         return setTimeout(() => i.channel.delete().catch(() => {}), 5000);
       }
@@ -1514,6 +1800,49 @@ client.on('interactionCreate', async (i) => {
       }
       if (sub === 'entfernen') return i.editReply(`🗑️ ${await removeAutoMod(i.guild)} AutoMod-Regeln gelöscht.`);
       return i.editReply(await changeWord(i.guild, i.options.getString('wort'), sub === 'wort_hinzufuegen'));
+    }
+
+    if (cmd === 'info') {
+      const up = Math.floor(process.uptime()), fmt = `${Math.floor(up / 86400)}d ${Math.floor(up % 86400 / 3600)}h ${Math.floor(up % 3600 / 60)}m`;
+      const dash = dashboardLoaded && process.env.DASHBOARD_URL && process.env.CLIENT_SECRET && process.env.SESSION_SECRET;
+      return i.reply({ flags: EPH, embeds: [new EmbedBuilder().setColor(COLOR).setTitle('ℹ️ Bot-Info').addFields(
+        { name: '🏓 Ping', value: `${client.ws.ping} ms`, inline: true }, { name: '⏱️ Laufzeit', value: fmt, inline: true },
+        { name: '👥 Mitglieder', value: String(i.guild.memberCount), inline: true },
+        { name: '💾 Speicher', value: VOLUME ? 'Volume aktiv' : 'Nur Discord-Backup', inline: true },
+        { name: '🌐 Website', value: dash ? 'an' : 'aus', inline: true }, { name: '🧩 Node', value: process.version, inline: true })] });
+    }
+
+    if (cmd === 'statuspanel') {
+      const ch = i.options.getChannel('kanal') ?? i.channel;
+      await i.deferReply({ flags: EPH });
+      await createStatusPanel(i.guild, ch);
+      return i.editReply(`📊 Live-Status-Panel in ${ch} erstellt. Es aktualisiert sich jede Minute.`);
+    }
+
+    if (cmd === 'vorschlag') {
+      const wait = 60_000 - (Date.now() - (sugCooldown.get(i.user.id) ?? 0));
+      if (wait > 0) return reply(i, `⏳ Bitte warte noch ${Math.ceil(wait / 1000)} Sekunden.`);
+      sugCooldown.set(i.user.id, Date.now());
+      const target = i.guild.channels.cache.get(c.channels.suggestions) ?? i.channel;
+      await createSuggestion(i.guild, target, i.user, i.options.getString('text'));
+      return reply(i, `💡 Danke! Dein Vorschlag steht in ${target}.`);
+    }
+
+    if (cmd === 'event') {
+      const sub = i.options.getSubcommand();
+      if (sub === 'erstellen') {
+        const ms = parseDuration(i.options.getString('in'));
+        if (!ms) return reply(i, 'Ungültige Zeit. Beispiele: `2h`, `1d`, `1d12h` (1 Minute bis 30 Tage).');
+        const target = i.options.getChannel('kanal') ?? i.guild.channels.cache.get(c.channels.events) ?? i.channel;
+        await createEvent(i.guild, target, {
+          title: i.options.getString('titel'), desc: i.options.getString('beschreibung'), at: Date.now() + ms,
+          hostId: i.user.id, pingRoleId: i.options.getRole('ping')?.id,
+        });
+        return reply(i, `📅 Event in ${target} erstellt.`);
+      }
+      const id = (String(i.options.getString('nachricht')).match(/(\d{17,20})\s*$/) || [])[1];
+      if (!id || !(await cancelEvent(i.guild, id))) return reply(i, 'Event nicht gefunden.');
+      return reply(i, '🗑️ Event gelöscht.');
     }
 
     if (cmd === 'backup') {
@@ -1885,6 +2214,7 @@ async function sendWelcome(member) {
 
 client.on('guildMemberAdd', async (member) => {
   const c = cfg(member.guild.id);
+  if (await checkJoinShield(member).catch(() => false)) return;
   if (!c.rulesGate && c.roles.player && !member.user.bot) {
     member.roles.add(c.roles.player).catch((e) => console.error('Auto-Rolle:', e.message));
   }
@@ -1892,6 +2222,16 @@ client.on('guildMemberAdd', async (member) => {
   log(member.guild, `📥 ${member.user.tag} ist beigetreten.`);
 });
 client.on('guildMemberRemove', (member) => log(member.guild, `📤 ${member.user.tag} hat den Server verlassen.`));
+
+// Nachrichten-Log (optional, im Dashboard einschaltbar)
+client.on('messageDelete', (msg) => {
+  if (!msg.guild || msg.author?.bot || !msg.content || !cfg(msg.guild.id).logMessages) return;
+  log(msg.guild, `🗑️ Nachricht von ${msg.author} in ${msg.channel} gelöscht:\n${msg.content.slice(0, 500)}`, { feed: false });
+});
+client.on('messageUpdate', (oldMsg, newMsg) => {
+  if (!newMsg.guild || newMsg.author?.bot || !oldMsg.content || oldMsg.content === newMsg.content || !cfg(newMsg.guild.id).logMessages) return;
+  log(newMsg.guild, `✏️ ${newMsg.author} hat eine Nachricht in ${newMsg.channel} bearbeitet:\n**Vorher:** ${oldMsg.content.slice(0, 400)}\n**Nachher:** ${(newMsg.content || '').slice(0, 400)}`, { feed: false });
+});
 
 // ───────────── Start ─────────────
 client.once('clientReady', async () => {
@@ -1913,6 +2253,8 @@ client.once('clientReady', async () => {
   checkGiveaways().catch(() => {});
   setInterval(() => checkTwitch().catch((e) => console.error('Twitch:', e.message)), 60_000);
   setInterval(() => xpVoiceTick().catch((e) => console.error('XP:', e.message)), 60_000);
+  setInterval(() => checkEvents().catch((e) => console.error('Events:', e.message)), 30_000);
+  setInterval(() => updateStatusPanels().catch((e) => console.error('Status-Panel:', e.message)), 60_000);
   setInterval(() => { const g = backupGuild(); if (g) backupNow(g).catch((e) => console.error('Backup:', e.message)); }, 5 * 60_000);
   setTimeout(() => recordStats().catch(() => {}), 45_000);
   setInterval(() => recordStats().catch(() => {}), 60 * 60_000);
@@ -1923,6 +2265,7 @@ client.once('clientReady', async () => {
     setupAutoMod, removeAutoMod, changeWord, getFaq, createPanel, editPanelMessage, isPanel, announce, log,
     startGiveaway, endGiveaway, parseDuration, getXp, xpInfo, applyRewards, backupNow,
     createRolePanel, isSafeRole, welcomeConfig, sendWelcome, modAction, ticketConfig,
+    createEvent, cancelEvent, decideSuggestion, saveTranscript, createStatusPanel, shieldConfig,
     backupInfo: () => ({ last: lastBackupAt, persistent: !!VOLUME, dataDir: DATA_DIR }),
   });
 });
@@ -1948,3 +2291,7 @@ process.on('SIGTERM', async () => {
   } catch {}
   process.exit(0);
 });
+
+process.on('unhandledRejection', (e) => console.error('Unbehandelter Fehler:', e?.message ?? e));
+process.on('uncaughtException', (e) => console.error('Fehler:', e?.message ?? e));
+client.on('error', (e) => console.error('Client-Fehler:', e.message));
