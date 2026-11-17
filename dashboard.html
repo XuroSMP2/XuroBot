@@ -389,6 +389,15 @@ async function vServer(root) {
       h('small', {}, bk.last ? 'Letztes Backup: ' + new Date(bk.last).toLocaleString('de-DE') : 'Seit dem Start noch kein Backup.')),
       btn('Jetzt sichern', async () => { await api('POST', '/api/backup'); toast('Backup erstellt'); show('Server'); }, 'sm primary'))));
 
+  const [sp, spChans] = await Promise.all([api('GET', '/api/statuspanel'), getChans()]);
+  const spSel = chanSelect(spChans);
+  root.append(card('📊 Live-Status-Panel', 'Eine Nachricht mit Online-Status, Spielerzahl und Namen, die sich jede Minute selbst aktualisiert.',
+    sp.exists ? h('p', { class: 'muted' }, 'Aktuell in #' + (sp.channel || '?') + '. Ein neues Panel ersetzt das alte.') : '',
+    field('Kanal', spSel),
+    h('div', { class: 'btns end' }, btn(sp.exists ? 'Neu erstellen' : 'Panel erstellen', async () => {
+      await api('POST', '/api/statuspanel', { channelId: spSel.value }); toast('Panel erstellt'); show('Server');
+    }, 'primary'))));
+
   const conf = h('input', { placeholder: 'LÖSCHEN' });
   const roles = h('input', { type: 'checkbox' });
   root.append(card('⚠️ Gefahrenzone', 'Löscht ALLE Kanäle und Kategorien des Servers samt Nachrichten. Das kann nicht rückgängig gemacht werden.',
@@ -832,12 +841,88 @@ async function vGiveaways(root) {
       }, 'sm danger')))) : empty('Noch keine Giveaways.')));
 }
 
+// ───────── Events ─────────
+function localInput(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+async function vEvents(root) {
+  const [list, chs, roles] = await Promise.all([api('GET', '/api/events'), getChans(), api('GET', '/api/roles')]);
+  const title = h('input', { placeholder: 'z. B. Bosskampf am Spawn' });
+  const desc = h('textarea', { rows: 3, placeholder: 'Beschreibung (optional)' });
+  const tomorrow = new Date(Date.now() + 86400000); tomorrow.setHours(18, 0, 0, 0);
+  const when = h('input', { type: 'datetime-local', value: localInput(tomorrow) });
+  const ch = chanSelect(chs, 'Event-Kanal (Standard)');
+  const ping = h('select', {}, h('option', { value: '' }, 'Niemanden pingen'), roles.filter((r) => !r.managed).map((r) => h('option', { value: r.id }, '@' + r.name)));
+  root.append(card('Neues Event', 'Mitglieder melden sich per Button an. 15 Minuten vor dem Start erinnert der Bot alle, die zugesagt oder "Vielleicht" gewählt haben.',
+    field('Titel', title), field('Beschreibung', desc),
+    h('div', { class: 'two' }, field('Start (deine Ortszeit)', when), field('Kanal', ch)),
+    field('Ping', ping),
+    h('div', { class: 'btns end' }, btn('📅 Event erstellen', async () => {
+      const at = new Date(when.value).getTime();
+      if (!when.value || Number.isNaN(at)) throw new Error('Bitte wähle Datum und Uhrzeit.');
+      await api('POST', '/api/events', { title: title.value, desc: desc.value, at, channelId: ch.value, pingRoleId: ping.value });
+      toast('Event erstellt'); show('Events');
+    }, 'primary'))));
+  root.append(card('Alle Events', '', list.length ? list.map((e) => h('div', { class: 'item' },
+    h('div', { class: 't' }, h('b', {}, e.title),
+      h('small', {}, `${new Date(e.at).toLocaleString('de-DE')} · #${e.channel}`),
+      h('small', {}, `✅ ${e.yes} · ❔ ${e.maybe} · ❌ ${e.no}`)),
+    badge(e.ended ? 'Beendet' : 'Geplant', e.ended ? '' : 'ok'),
+    btn('Löschen', async () => {
+      if (!(await ask('Event löschen?', 'Das Event samt Nachricht wird gelöscht.'))) return;
+      await api('DELETE', '/api/events/' + e.id); show('Events');
+    }, 'sm danger'))) : empty('Noch keine Events.')));
+}
+
+// ───────── Vorschläge ─────────
+async function vSuggestions(root) {
+  const list = await api('GET', '/api/suggestions');
+  const decide = async (s, status) => {
+    const reason = h('textarea', { rows: 3, placeholder: 'Begründung (optional)' });
+    await dialog({ title: status === 'accepted' ? 'Vorschlag annehmen' : 'Vorschlag ablehnen', body: field('Begründung', reason), ok: status === 'accepted' ? 'Annehmen' : 'Ablehnen', danger: status === 'declined',
+      onOk: async () => { await api('POST', `/api/suggestions/${s.id}/decide`, { status, reason: reason.value }); toast('Entscheidung gespeichert'); show('Vorschläge'); } });
+  };
+  const tone = { open: ['Offen', ''], accepted: ['Angenommen', 'ok'], declined: ['Abgelehnt', 'bad'] };
+  root.append(card('Vorschläge', 'Mitglieder reichen Ideen mit /vorschlag ein. Der Spieler bekommt per Privatnachricht Bescheid, wenn du entscheidest.', list.length ? list.map((s) => h('div', { class: 'item' },
+    h('div', { class: 't' }, h('b', {}, s.text), h('small', {}, `von ${s.by} · 👍 ${s.up} · 👎 ${s.down}`), s.reason ? h('small', {}, 'Begründung: ' + s.reason) : ''),
+    h('div', { class: 'btns' }, badge(tone[s.status][0], tone[s.status][1]),
+      s.status === 'open' ? h('button', { class: 'btn sm primary', onclick: () => decide(s, 'accepted') }, '✅') : '',
+      s.status === 'open' ? h('button', { class: 'btn sm', onclick: () => decide(s, 'declined') }, '❌') : '',
+      btn('Löschen', async () => {
+        if (!(await ask('Vorschlag löschen?', 'Der Vorschlag samt Nachricht wird gelöscht.'))) return;
+        await api('DELETE', '/api/suggestions/' + s.id); show('Vorschläge');
+      }, 'sm danger')))) : empty('Noch keine Vorschläge.')));
+}
+
+// ───────── Schutz & Logs ─────────
+async function vShield(root) {
+  const [sh, o] = await Promise.all([api('GET', '/api/shield'), api('GET', '/api/overview')]);
+  const raid = makeSwitch('Raid-Erkennung', sh.raidOn, 'Meldet im Log-Kanal und pingt das Team, wenn viele Mitglieder sehr schnell beitreten.');
+  const kick = makeSwitch('Bei Raid automatisch kicken', sh.raidKick, 'Kickt die schnellen Beitritte und für 5 Minuten alle weiteren. Vorsicht bei geplanten Events.');
+  const minAge = h('input', { type: 'number', min: '0', max: '365', value: String(sh.minAgeDays) });
+  const joins = h('input', { type: 'number', min: '2', max: '50', value: String(sh.raidJoins) });
+  const secs = h('input', { type: 'number', min: '3', max: '120', value: String(sh.raidSeconds) });
+  root.append(card('🛡️ Join-Schutz', 'Schützt den Server vor neuen Fake- und Spam-Accounts.',
+    field('Mindestalter des Discord-Accounts in Tagen (0 = aus)', minAge),
+    raid.el, h('div', { class: 'two', style: 'margin-top:12px' }, field('Ab wie vielen Beitritten', joins), field('Innerhalb von (Sekunden)', secs)), kick.el,
+    h('div', { class: 'btns end' }, btn('Speichern', async () => {
+      await api('PUT', '/api/shield', { minAgeDays: minAge.value, raidOn: raid.input.checked, raidJoins: joins.value, raidSeconds: secs.value, raidKick: kick.input.checked });
+      toast('Gespeichert');
+    }, 'primary'))));
+  root.append(card('🗂️ Protokolle', 'Was der Bot im Kanal 📋・logs festhält.',
+    h('div', { class: 'item' }, h('div', { class: 't' }, h('b', {}, 'Ticket-Transkripte'), h('small', {}, 'Wird beim Schließen eines Tickets automatisch als Textdatei im Log-Kanal gespeichert.')), badge('Immer aktiv', 'ok')),
+    toggle('Gelöschte und bearbeitete Nachrichten protokollieren', o.logMessages, async (v) => { await api('POST', '/api/settings', { logMessages: v }); toast('Gespeichert'); },
+      'Nur für das Team sichtbar. Standardmäßig aus. Schalte es nur ein, wenn deine Mitglieder davon wissen.')));
+}
+
 // ───────── Navigation, Themes, Suche ─────────
 const NAV = [
   ['Allgemein', [['Übersicht', '🏠', vOverview], ['Server', '🛠️', vServer]]],
-  ['Community', [['Rollen & Mitglieder', '🎭', vRoles], ['XP & Level', '⭐', vXp], ['Giveaways', '🎁', vGiveaways], ['Twitch', '📺', vTwitch], ['Willkommen', '👋', vWelcome], ['Nachrichten', '📢', vAnnounce]]],
+  ['Community', [['Rollen & Mitglieder', '🎭', vRoles], ['XP & Level', '⭐', vXp], ['Giveaways', '🎁', vGiveaways], ['Events', '📅', vEvents], ['Vorschläge', '💡', vSuggestions], ['Twitch', '📺', vTwitch], ['Willkommen', '👋', vWelcome], ['Nachrichten', '📢', vAnnounce]]],
   ['Support', [['Panels', '🧩', vPanels], ['Tickets', '🎫', vTickets], ['Ticket-Fragen', '📝', vTicketQs], ['Auto-Antworten', '💬', vFaq]]],
-  ['Moderation', [['Moderation', '🛡️', vModeration], ['AutoMod', '🤖', vAutomod]]],
+  ['Moderation', [['Moderation', '🛡️', vModeration], ['Schutz & Logs', '🔐', vShield], ['AutoMod', '🤖', vAutomod]]],
 ];
 const views = {}, icons = {};
 let current = 'Übersicht';
