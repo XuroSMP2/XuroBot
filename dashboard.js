@@ -183,7 +183,7 @@ main{max-width:720px;margin:0 auto}h1{margin:0 0 4px}p.s{color:#8d97ad;margin:0 
       setup: setupDone(g),
       mc: mc.online ? { online: true, players: mc.res.players.online, max: mc.res.players.max, version: mc.res.version.name } : { online: false },
       persistent: ctx.backupInfo().persistent,
-      aiAvailable: !!env.ANTHROPIC_API_KEY, ai: ctx.aiOn(c), guided: ctx.guidedOn(c), rulesGate: !!c.rulesGate, publicLeaderboard: !!c.publicLeaderboard,
+      aiAvailable: !!env.ANTHROPIC_API_KEY, ai: ctx.aiOn(c), guided: ctx.guidedOn(c), rulesGate: !!c.rulesGate, publicLeaderboard: !!c.publicLeaderboard, logMessages: !!c.logMessages,
     });
   }));
 
@@ -192,6 +192,7 @@ main{max-width:720px;margin:0 auto}h1{margin:0 0 4px}p.s{color:#8d97ad;margin:0 
     if (typeof req.body.guided === 'boolean') c.guided = req.body.guided;
     if (typeof req.body.rulesGate === 'boolean') c.rulesGate = req.body.rulesGate;
     if (typeof req.body.publicLeaderboard === 'boolean') c.publicLeaderboard = req.body.publicLeaderboard;
+    if (typeof req.body.logMessages === 'boolean') c.logMessages = req.body.logMessages;
     if (typeof req.body.ai === 'boolean') {
       if (!env.ANTHROPIC_API_KEY) return res.status(400).json({ error: 'Es fehlt die Variable ANTHROPIC_API_KEY.' });
       c.ai = req.body.ai;
@@ -349,6 +350,7 @@ main{max-width:720px;margin:0 auto}h1{margin:0 0 4px}p.s{color:#8d97ad;margin:0 
     const ch = req.guild.channels.cache.get(req.params.id);
     if (!ch || !ch.topic || !TICKET.test(ch.topic)) return res.status(404).json({ error: 'Ticket nicht gefunden.' });
     const name = ch.name;
+    await ctx.saveTranscript(req.guild, ch, req.sess.n).catch(() => {});
     await ch.delete(`Dashboard: ${req.sess.n}`);
     ctx.log(req.guild, `🔒 Ticket #${name} wurde im Dashboard von ${req.sess.n} geschlossen.`);
     res.json({ ok: true });
@@ -428,6 +430,87 @@ main{max-width:720px;margin:0 auto}h1{margin:0 0 4px}p.s{color:#8d97ad;margin:0 
     if (c.warns) delete c.warns[req.params.id];
     save();
     audit(req, `🧹 hat die Verwarnungen von <@${req.params.id}> gelöscht`);
+    res.json({ ok: true });
+  }));
+
+  // Events
+  api.get('/events', (req, res) => {
+    const g = req.guild;
+    res.json(Object.entries(cfg(g.id).events ?? {}).map(([id, e]) => ({
+      id, title: e.title, desc: e.desc, at: e.at, channel: g.channels.cache.get(e.channelId)?.name || '?',
+      yes: e.yes.length, maybe: e.maybe.length, no: e.no.length, ended: e.ended,
+    })).sort((a, b) => b.at - a.at));
+  });
+  api.post('/events', wrap(async (req, res) => {
+    const title = text(req.body.title, 100);
+    const at = Number(req.body.at);
+    if (!title) return res.status(400).json({ error: 'Bitte gib einen Titel ein.' });
+    if (!Number.isFinite(at) || at < Date.now() + 60_000 || at > Date.now() + 90 * 86400_000) {
+      return res.status(400).json({ error: 'Wähle einen Zeitpunkt zwischen in 1 Minute und in 90 Tagen.' });
+    }
+    const c = cfg(req.guild.id);
+    const ch = req.guild.channels.cache.get(String(req.body.channelId || c.channels.events));
+    if (!ch || ch.type !== ChannelType.GuildText) return res.status(400).json({ error: 'Bitte wähle einen Textkanal.' });
+    const ping = String(req.body.pingRoleId || '');
+    if (ping && !req.guild.roles.cache.has(ping)) return res.status(400).json({ error: 'Rolle zum Pingen nicht gefunden.' });
+    await ctx.createEvent(req.guild, ch, { title, desc: text(req.body.desc, 1000), at, hostId: req.sess.u, pingRoleId: ping });
+    audit(req, `hat ein Event erstellt: ${title}`);
+    res.json({ ok: true });
+  }));
+  api.delete('/events/:id', wrap(async (req, res) => {
+    if (!(await ctx.cancelEvent(req.guild, req.params.id))) return res.status(404).json({ error: 'Event nicht gefunden.' });
+    audit(req, 'hat ein Event gelöscht');
+    res.json({ ok: true });
+  }));
+
+  // Vorschläge
+  api.get('/suggestions', (req, res) => {
+    const g = req.guild;
+    res.json(Object.entries(cfg(g.id).suggestions ?? {}).map(([id, s]) => ({
+      id, text: s.text, status: s.status, reason: s.reason, up: s.up.length, down: s.down.length,
+      by: g.members.cache.get(s.by)?.displayName || s.by,
+    })).reverse().slice(0, 50));
+  });
+  api.post('/suggestions/:id/decide', wrap(async (req, res) => {
+    if (!req.member.permissions.has(P.ModerateMembers)) return res.status(403).json({ error: 'Dafür fehlt dir die Berechtigung.' });
+    await ctx.decideSuggestion(req.guild, req.params.id, String(req.body.status), text(req.body.reason, 500));
+    res.json({ ok: true });
+  }));
+  api.delete('/suggestions/:id', wrap(async (req, res) => {
+    const c = cfg(req.guild.id), s = c.suggestions?.[req.params.id];
+    if (!s) return res.status(404).json({ error: 'Vorschlag nicht gefunden.' });
+    const ch = req.guild.channels.cache.get(s.channelId);
+    const msg = ch && await ch.messages.fetch(req.params.id).catch(() => null);
+    if (msg) await msg.delete().catch(() => {});
+    delete c.suggestions[req.params.id]; save();
+    res.json({ ok: true });
+  }));
+
+  // Join-Schutz
+  api.get('/shield', (req, res) => res.json(ctx.shieldConfig(cfg(req.guild.id))));
+  api.put('/shield', wrap(async (req, res) => {
+    const c = cfg(req.guild.id), b = req.body, s = { ...ctx.shieldConfig(c) };
+    const minAge = clampInt(b.minAgeDays, 0, 365), joins = clampInt(b.raidJoins, 2, 50), secs = clampInt(b.raidSeconds, 3, 120);
+    if (minAge !== null) s.minAgeDays = minAge;
+    if (joins !== null) s.raidJoins = joins;
+    if (secs !== null) s.raidSeconds = secs;
+    if (typeof b.raidOn === 'boolean') s.raidOn = b.raidOn;
+    if (typeof b.raidKick === 'boolean') s.raidKick = b.raidKick;
+    c.shield = s; save();
+    audit(req, '🛡️ hat den Join-Schutz geändert');
+    res.json({ ok: true, shield: s });
+  }));
+
+  // Live-Status-Panel
+  api.get('/statuspanel', (req, res) => {
+    const p = cfg(req.guild.id).statusPanel;
+    res.json({ exists: !!p, channel: p ? req.guild.channels.cache.get(p.channelId)?.name || null : null });
+  });
+  api.post('/statuspanel', wrap(async (req, res) => {
+    const ch = req.guild.channels.cache.get(String(req.body.channelId));
+    if (!ch || ch.type !== ChannelType.GuildText) return res.status(400).json({ error: 'Bitte wähle einen Textkanal.' });
+    await ctx.createStatusPanel(req.guild, ch);
+    audit(req, `📊 hat ein Live-Status-Panel in #${ch.name} erstellt`);
     res.json({ ok: true });
   }));
 
